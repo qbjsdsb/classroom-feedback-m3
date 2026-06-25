@@ -1,0 +1,8 @@
+/* 基本重置：MUI CssBaseline 已处理大部分，这里仅保留必要的全局样式 */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
