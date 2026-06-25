@@ -56,7 +56,59 @@ import AiService from '../services/aiService';
 import { getRecorderEngine } from '../services/recorderHolder';
 import { exportData, importData } from '../utils/dataTransfer';
 import { generateFeedbackTitle, getModuleIcon } from '../utils/feedback';
-import StyleAnalysisDialog from '../components/StyleAnalysisDialog';
+
+// 智能分析：可推断项的中文标签映射（用于改动反馈卡片展示）
+const ANALYSIS_LABELS = {
+  tone: '语气风格',
+  useEmoji: '使用 Emoji',
+  emojiPosition: 'Emoji 位置',
+  useBulletPoints: '分点输出',
+  nameShorten: '姓名缩写',
+  includeParentHelp: '包含家长协助',
+  strictInput: '严格遵循输入',
+  titleTemplate: '标题模板',
+  titleDateFormat: '日期格式',
+  institutionName: '机构名',
+  teacherName: '老师名',
+  moduleWrap: '模块包裹符号',
+  moduleSeparator: '模块分隔符',
+  customPrompt: '整体备注',
+  modules: '模块列表',
+};
+
+// 把字段值映射成可读文本（用于改动反馈卡片）
+const TONE_LABELS = {
+  friendly: '亲切', formal: '正式', concise: '简洁',
+  detailed: '详细', humorous: '幽默', encouraging: '鼓励',
+};
+const WRAP_LABELS = {
+  '【】': '【】', '[]': '[]', '（）': '（）', '·': '·', none: '无',
+};
+const SEP_LABELS = {
+  '\n\n': '空行', '\n': '单换行', '\n---\n': '横线', '\n\n---\n\n': '空行+横线',
+};
+const DATE_FMT_LABELS = {
+  'M.D': 'M.D', 'MM-DD': 'MM-DD', 'X月X日': 'X月X日', 'YYYY-MM-DD': 'YYYY-MM-DD',
+};
+
+function formatValue(key, val) {
+  if (val === null || val === undefined || val === '') return '（空）';
+  switch (key) {
+    case 'tone': return TONE_LABELS[val] || String(val);
+    case 'useEmoji':
+    case 'useBulletPoints':
+    case 'includeParentHelp':
+    case 'strictInput':
+      return val ? '是' : '否';
+    case 'nameShorten': return val ? '缩写' : '不缩写';
+    case 'moduleWrap': return WRAP_LABELS[val] || String(val);
+    case 'moduleSeparator': return SEP_LABELS[val] || JSON.stringify(val);
+    case 'titleDateFormat': return DATE_FMT_LABELS[val] || String(val);
+    case 'modules':
+      return Array.isArray(val) ? `${val.length} 个模块` : String(val);
+    default: return String(val);
+  }
+}
 
 // 语气风格选项
 const TONE_OPTIONS = [
@@ -135,13 +187,18 @@ export default function SettingsPage() {
   // 批次2：当前展开编辑的模块索引（null 表示都收起）
   const [expandedModuleIndex, setExpandedModuleIndex] = useState(null);
 
-  // 智能分析：样本输入 + 分析状态 + 结果预览 Dialog
-  const [analysisSample, setAnalysisSample] = useState('');
-  const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
+  // 智能分析：多样本列表 + 分析状态 + 改动反馈 Alert
+  const [samples, setSamples] = useState([]);          // 已添加的样本数组
+  const [sampleInput, setSampleInput] = useState('');  // 当前输入框内容
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const analysisAbortRef = useRef(null);
+  // 改动反馈 Alert
+  const [analysisChanges, setAnalysisChanges] = useState(null);  // [{key,label,oldValue,newValue}] 或 null
+  const [analysisSnapshot, setAnalysisSnapshot] = useState(null); // 应用前快照，用于撤销
+  const [analysisAlertVisible, setAnalysisAlertVisible] = useState(false);
+  const [analysisAlertExpanded, setAnalysisAlertExpanded] = useState(false);
+  const analysisAlertTimerRef = useRef(null);
 
   // 挂载时从 Storage 初始化所有 state
   useEffect(() => {
@@ -336,11 +393,33 @@ export default function SettingsPage() {
     });
   }, [modules, Storage]);
 
-  // ========== 智能分析：调用 AI 分析样本 ==========
+  // ========== 智能分析：添加/删除/清空样本 ==========
+  const handleAddSample = useCallback(() => {
+    const text = sampleInput.trim();
+    if (!text) {
+      UI.showToast('请先粘贴一段反馈样本');
+      return;
+    }
+    setSamples(prev => [...prev, text]);
+    setSampleInput('');
+  }, [sampleInput]);
+
+  const handleRemoveSample = useCallback((idx) => {
+    setSamples(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const handleClearSamples = useCallback(() => {
+    if (samples.length === 0) return;
+    UI.showConfirm(`确定清空全部 ${samples.length} 条样本？`, () => {
+      setSamples([]);
+      UI.showToast('已清空样本列表');
+    });
+  }, [samples.length]);
+
+  // ========== 智能分析：调用 AI 分析多样本并自动应用 ==========
   const handleStartAnalysis = useCallback(async () => {
-    const sample = analysisSample.trim();
-    if (!sample) {
-      UI.showToast('请先粘贴一段课堂反馈样本');
+    if (samples.length === 0) {
+      UI.showToast('请先添加至少一段反馈样本');
       return;
     }
     const apiKey = Storage.getApiKey();
@@ -348,117 +427,183 @@ export default function SettingsPage() {
       UI.showToast('请先设置 API Key');
       return;
     }
-    setAnalysisResult(null);
+
+    // 应用前快照（用于撤销）
+    const snapshot = {
+      style: { ...style },
+      modules: modules.map(m => ({ ...m })),
+      moduleLengths: { ...moduleLengths },
+      customPrompt,
+    };
+
     setAnalysisError(null);
     setAnalyzing(true);
-    setAnalysisDialogOpen(true);
+    setAnalysisChanges(null);
+    setAnalysisAlertVisible(false);
     const abortController = new AbortController();
     analysisAbortRef.current = abortController;
+
     try {
-      const result = await AiService.analyzeFeedbackStyle(sample, { signal: abortController.signal });
-      setAnalysisResult(result);
+      const result = await AiService.analyzeFeedbackStyle(samples, { signal: abortController.signal });
+      // 自动应用：把所有"可推断"字段（非 null/非空）直接覆盖到 style/modules
+      // 同时收集"被改动的项"用于反馈卡片
+      const changes = [];
+      const oldStyle = { ...style };
+      const oldModules = modules;
+      const oldModuleLengths = { ...moduleLengths };
+      const newStyle = { ...oldStyle };
+      let newCustomPrompt = customPrompt;
+
+      const inferable = (v) => v !== null && v !== undefined && v !== '';
+
+      const styleKeys = [
+        'tone', 'useEmoji', 'emojiPosition', 'useBulletPoints',
+        'nameShorten', 'includeParentHelp', 'strictInput',
+        'titleTemplate', 'titleDateFormat', 'institutionName', 'teacherName',
+        'moduleWrap', 'moduleSeparator',
+      ];
+      for (const key of styleKeys) {
+        if (inferable(result[key])) {
+          const oldVal = oldStyle[key];
+          const newVal = result[key];
+          // 比较是否真的变化（考虑 undefined 与默认值等价的情况）
+          if (String(oldVal ?? '') !== String(newVal)) {
+            changes.push({
+              key,
+              label: ANALYSIS_LABELS[key] || key,
+              oldValue: formatValue(key, oldVal),
+              newValue: formatValue(key, newVal),
+            });
+            newStyle[key] = newVal;
+          }
+        }
+      }
+
+      // customPrompt 单独处理（同时同步 local state）
+      if (inferable(result.customPrompt)) {
+        if ((oldStyle.customPrompt || '') !== result.customPrompt) {
+          changes.push({
+            key: 'customPrompt',
+            label: ANALYSIS_LABELS.customPrompt,
+            oldValue: formatValue('customPrompt', oldStyle.customPrompt),
+            newValue: formatValue('customPrompt', result.customPrompt),
+          });
+          newStyle.customPrompt = result.customPrompt;
+          newCustomPrompt = result.customPrompt;
+        }
+      }
+
+      // 模块：替换模式（保留 enabled/custom，否则按 AI 推断）
+      let newModules = oldModules;
+      let newLengths = { ...oldModuleLengths };
+      if (Array.isArray(result.modules) && result.modules.length > 0) {
+        newModules = result.modules.map(im => {
+          const existing = oldModules.find(m => m.name === im.name);
+          const built = {
+            name: im.name,
+            enabled: existing ? existing.enabled : true,
+            custom: existing ? existing.custom : true,
+            description: existing ? existing.description : '',
+          };
+          if (im.icon) built.icon = im.icon;
+          else if (existing && existing.icon) built.icon = existing.icon;
+          if (im.prompt) built.prompt = im.prompt;
+          else if (existing && existing.prompt) built.prompt = existing.prompt;
+          return built;
+        });
+        // 同步 moduleLengths
+        for (const im of result.modules) {
+          if (typeof im.minLength === 'number' && typeof im.maxLength === 'number') {
+            newLengths[im.name] = { min: im.minLength, max: im.maxLength };
+          }
+        }
+        // 模块整体作为一项改动
+        const oldNames = oldModules.map(m => m.name).join('、') || '（空）';
+        const newNames = newModules.map(m => m.name).join('、') || '（空）';
+        if (oldNames !== newNames) {
+          changes.push({
+            key: 'modules',
+            label: ANALYSIS_LABELS.modules,
+            oldValue: `${oldModules.length} 个：${oldNames}`,
+            newValue: `${newModules.length} 个：${newNames}`,
+          });
+        }
+        newStyle.moduleLengths = newLengths;
+      }
+
+      // 持久化
+      Storage.saveStyle(newStyle);
+      Storage.saveModules(newModules);
+      setStyle(newStyle);
+      setModules(newModules);
+      setModuleLengths(newLengths);
+      setCustomPrompt(newCustomPrompt);
+
+      // 显示改动反馈 Alert
+      setAnalysisSnapshot(snapshot);
+      setAnalysisChanges(changes);
+      setAnalysisAlertVisible(true);
+      setAnalysisAlertExpanded(false);
+
+      // 30 秒后自动消失
+      if (analysisAlertTimerRef.current) clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = setTimeout(() => {
+        setAnalysisAlertVisible(false);
+        analysisAlertTimerRef.current = null;
+      }, 30000);
+
+      UI.showToast(changes.length > 0
+        ? `AI 已自动调节 ${changes.length} 项设置`
+        : 'AI 分析完成，无配置需要调整');
     } catch (err) {
       if (err.name === 'AbortError') return;
       setAnalysisError(err.message || '分析失败');
+      UI.showToast(`分析失败：${err.message || '未知错误'}`);
     } finally {
       setAnalyzing(false);
       analysisAbortRef.current = null;
     }
-  }, [analysisSample, Storage]);
+  }, [samples, style, modules, moduleLengths, customPrompt, Storage]);
 
-  // ========== 智能分析：应用用户勾选的配置 ==========
-  const handleApplyAnalysis = useCallback(({ selected, moduleMode }) => {
-    const a = analysisResult;
-    if (!a) return;
-    // 1. 应用 style 字段
-    const newStyle = { ...style };
-    if (selected.tone && a.tone) newStyle.tone = a.tone;
-    if (selected.useEmoji && a.useEmoji !== null && a.useEmoji !== undefined) newStyle.useEmoji = a.useEmoji;
-    if (selected.emojiPosition && a.emojiPosition) newStyle.emojiPosition = a.emojiPosition;
-    if (selected.useBulletPoints && a.useBulletPoints !== null && a.useBulletPoints !== undefined) newStyle.useBulletPoints = a.useBulletPoints;
-    if (selected.nameShorten && a.nameShorten !== null && a.nameShorten !== undefined) newStyle.nameShorten = a.nameShorten;
-    if (selected.includeParentHelp && a.includeParentHelp !== null && a.includeParentHelp !== undefined) newStyle.includeParentHelp = a.includeParentHelp;
-    if (selected.strictInput && a.strictInput !== null && a.strictInput !== undefined) newStyle.strictInput = a.strictInput;
-    if (selected.titleTemplate && a.titleTemplate) newStyle.titleTemplate = a.titleTemplate;
-    if (selected.titleDateFormat && a.titleDateFormat) newStyle.titleDateFormat = a.titleDateFormat;
-    if (selected.institutionName && a.institutionName) newStyle.institutionName = a.institutionName;
-    if (selected.teacherName && a.teacherName) newStyle.teacherName = a.teacherName;
-    if (selected.moduleWrap && a.moduleWrap) newStyle.moduleWrap = a.moduleWrap;
-    if (selected.moduleSeparator && a.moduleSeparator) newStyle.moduleSeparator = a.moduleSeparator;
-    if (selected.customPrompt && a.customPrompt !== null && a.customPrompt !== undefined) {
-      newStyle.customPrompt = a.customPrompt;
-      setCustomPrompt(a.customPrompt);
+  // ========== 智能分析：撤销上次自动应用 ==========
+  const handleUndoAnalysis = useCallback(() => {
+    if (!analysisSnapshot) return;
+    const snap = analysisSnapshot;
+    Storage.saveStyle(snap.style);
+    Storage.saveModules(snap.modules);
+    setStyle(snap.style);
+    setModules(snap.modules);
+    setModuleLengths(snap.moduleLengths);
+    setCustomPrompt(snap.customPrompt);
+    setAnalysisAlertVisible(false);
+    setAnalysisChanges(null);
+    setAnalysisSnapshot(null);
+    if (analysisAlertTimerRef.current) {
+      clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = null;
     }
-    setStyle(newStyle);
-    Storage.saveStyle(newStyle);
+    UI.showToast('已撤销 AI 自动调节');
+  }, [analysisSnapshot, Storage]);
 
-    // 2. 应用模块
-    if (selected.modules && Array.isArray(a.modules) && a.modules.length > 0) {
-      let newModules;
-      if (moduleMode === 'replace') {
-        // 替换：保留所有模块的 enabled/custom 字段（同名继承），否则按 AI 推断生成
-        newModules = a.modules.map(im => {
-          const existing = modules.find(m => m.name === im.name);
-          return {
-            name: im.name,
-            enabled: existing ? existing.enabled : true,
-            custom: existing ? existing.custom : true,
-            icon: im.icon || (existing ? existing.icon : undefined),
-            prompt: im.prompt || (existing ? existing.prompt : undefined),
-            description: existing ? existing.description : '',
-          };
-        });
-      } else {
-        // 合并：保留所有当前模块，对 AI 推断的同名模块更新 icon/prompt，新增模块追加
-        newModules = [...modules];
-        for (const im of a.modules) {
-          const idx = newModules.findIndex(m => m.name === im.name);
-          if (idx >= 0) {
-            newModules[idx] = {
-              ...newModules[idx],
-              ...(im.icon ? { icon: im.icon } : {}),
-              ...(im.prompt ? { prompt: im.prompt } : {}),
-            };
-          } else {
-            newModules.push({
-              name: im.name, enabled: true, custom: true,
-              icon: im.icon || undefined, prompt: im.prompt || undefined, description: '',
-            });
-          }
-        }
-      }
-      // 清理 undefined 字段
-      newModules = newModules.map(m => {
-        const cleaned = { ...m };
-        if (cleaned.icon === undefined) delete cleaned.icon;
-        if (cleaned.prompt === undefined) delete cleaned.prompt;
-        return cleaned;
-      });
-      Storage.saveModules(newModules);
-      setModules(newModules);
-
-      // 同步 moduleLengths：用 AI 推断的 min/max 更新（仅当应用模块时）
-      const newLengths = { ...moduleLengths };
-      for (const im of a.modules) {
-        if (typeof im.minLength === 'number' && typeof im.maxLength === 'number') {
-          newLengths[im.name] = { min: im.minLength, max: im.maxLength };
-        }
-      }
-      setModuleLengths(newLengths);
-      // moduleLengths 保存在 style 里，需同步
-      Storage.saveStyle({ ...newStyle, moduleLengths: newLengths });
+  // 关闭 Alert
+  const handleCloseAnalysisAlert = useCallback(() => {
+    setAnalysisAlertVisible(false);
+    if (analysisAlertTimerRef.current) {
+      clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = null;
     }
+  }, []);
 
-    setAnalysisDialogOpen(false);
-    UI.showToast('已应用勾选的配置');
-  }, [analysisResult, style, modules, moduleLengths, Storage]);
-
-  // 卸载时中止进行中的分析请求
+  // 卸载时中止进行中的分析请求 + 清理 Alert 定时器
   useEffect(() => {
     return () => {
       if (analysisAbortRef.current) {
         analysisAbortRef.current.abort();
         analysisAbortRef.current = null;
+      }
+      if (analysisAlertTimerRef.current) {
+        clearTimeout(analysisAlertTimerRef.current);
+        analysisAlertTimerRef.current = null;
       }
     };
   }, []);
@@ -777,6 +922,161 @@ export default function SettingsPage() {
         <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 500 }}>系统设置</Typography>
       </Stack>
 
+      {/* ========== 顶部：AI 改动反馈 Alert（应用后出现，30秒自动消失） ========== */}
+      {analysisAlertVisible && analysisChanges && (
+        <Alert
+          severity="success"
+          icon={<AutoAwesomeIcon />}
+          sx={{ mb: 2, alignItems: 'flex-start' }}
+          action={
+            <Stack direction="row" spacing={0.5} sx={{ mt: -0.5 }}>
+              <Button
+                size="small"
+                color="inherit"
+                onClick={handleUndoAnalysis}
+                sx={{ textTransform: 'none' }}
+              >
+                撤销
+              </Button>
+              <IconButton size="small" color="inherit" onClick={handleCloseAnalysisAlert} aria-label="关闭">
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            AI 已自动调节 {analysisChanges.length} 项设置
+          </Typography>
+          <Box
+            component="span"
+            sx={{ cursor: 'pointer', color: 'primary.main', textDecoration: 'underline', ml: 0.5 }}
+            onClick={() => setAnalysisAlertExpanded(!analysisAlertExpanded)}
+          >
+            {analysisAlertExpanded ? '收起详情' : '查看详情'}
+          </Box>
+          {analysisAlertExpanded && (
+            <Stack spacing={0.5} sx={{ mt: 1 }}>
+              {analysisChanges.map((c, i) => (
+                <Paper key={i} variant="outlined" sx={{ p: 0.75, bgcolor: 'background.paper' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
+                    {c.label}
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5, useFlexGap: true }}>
+                    <Chip size="small" variant="outlined" label={`原: ${c.oldValue}`} />
+                    <Typography variant="caption" color="text.secondary">→</Typography>
+                    <Chip size="small" color="primary" label={`新: ${c.newValue}`} />
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Alert>
+      )}
+
+      {/* ========== 智能分析（设置页核心，独立顶部卡片） ========== */}
+      <Card variant="outlined" sx={{ mb: 2, borderColor: 'primary.main', borderWidth: 2, bgcolor: 'action.hover' }}>
+        <CardHeader
+          avatar={<AutoAwesomeIcon color="primary" />}
+          title="智能分析：从样本反推配置"
+          titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+          subheader="粘贴你想要的课堂反馈样本，可添加多条；AI 综合分析后自动调节下方设置，并展示每项改动"
+        />
+        <CardContent sx={{ pt: 0 }}>
+          {/* 样本输入区 */}
+          <TextField
+            multiline
+            minRows={3}
+            maxRows={8}
+            value={sampleInput}
+            onChange={(e) => setSampleInput(e.target.value)}
+            placeholder={'粘贴一段完整的课堂反馈样本，包含标题和各模块内容。例如：\n\n6.25小明数学课堂反馈\n\n【课堂内容】\n本节课讲解了二次函数的图像与性质...'}
+            fullWidth
+            size="small"
+            sx={{ mb: 1 }}
+          />
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleAddSample}
+              disabled={!sampleInput.trim()}
+              sx={{ textTransform: 'none' }}
+            >
+              添加样本
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              可反复粘贴不同样本加入列表，AI 会综合所有样本判断
+            </Typography>
+          </Stack>
+
+          {/* 已添加的样本列表 */}
+          {samples.length > 0 && (
+            <Box sx={{ mb: 1.5 }}>
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  已添加 {samples.length} 条样本
+                </Typography>
+                <Button
+                  size="small"
+                  color="error"
+                  startIcon={<DeleteOutlineIcon />}
+                  onClick={handleClearSamples}
+                  sx={{ textTransform: 'none' }}
+                >
+                  清空全部
+                </Button>
+              </Stack>
+              <Stack spacing={0.75}>
+                {samples.map((s, idx) => (
+                  <Paper key={idx} variant="outlined" sx={{ p: 1, bgcolor: 'background.paper' }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                      <Chip label={idx + 1} size="small" color="primary" sx={{ flexShrink: 0, height: 20 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          flexGrow: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {s}
+                      </Typography>
+                      <IconButton size="small" onClick={() => handleRemoveSample(idx)} aria-label="删除样本">
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {/* 分析错误提示 */}
+          {analysisError && (
+            <Alert severity="error" sx={{ mb: 1.5, py: 0.5 }}>
+              分析失败：{analysisError}
+            </Alert>
+          )}
+
+          {/* AI 综合分析按钮 */}
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Button
+              variant="contained"
+              startIcon={analyzing ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
+              onClick={handleStartAnalysis}
+              disabled={analyzing || samples.length === 0}
+              sx={{ textTransform: 'none' }}
+            >
+              {analyzing ? `AI 综合分析中（${samples.length} 条）...` : `AI 综合分析并自动应用（${samples.length} 条样本）`}
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+            分析后所有可推断的配置会被自动覆盖，并在顶部弹出改动反馈，可一键撤销
+          </Typography>
+        </CardContent>
+      </Card>
+
       {/* 电脑端2列 masonry：CSS multi-column，卡片按高度自动流动填充，避免单列过长 */}
       <Box sx={{
         columnCount: { xs: 1, md: 2 },
@@ -907,43 +1207,6 @@ export default function SettingsPage() {
                   </Button>
                 </Box>
               )}
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* ========== 智能分析（粘贴样本一键配置） ========== */}
-        <Card variant="outlined" sx={{ borderColor: 'primary.main', borderWidth: 1.5 }}>
-          <CardHeader
-            avatar={<AutoAwesomeIcon color="primary" />}
-            title="智能分析：从样本反推配置"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-            subheader="粘贴一段你想要的课堂反馈样本，AI 自动分析格式/风格/模块并填充下方设置"
-          />
-          <CardContent sx={{ pt: 0 }}>
-            <TextField
-              multiline
-              minRows={4}
-              maxRows={10}
-              value={analysisSample}
-              onChange={(e) => setAnalysisSample(e.target.value)}
-              placeholder={'粘贴一段完整的课堂反馈样本，包含标题和各模块内容。例如：\n\n6.25小明数学课堂反馈\n\n【课堂内容】\n本节课讲解了二次函数的图像与性质...\n\n【课堂表现】\n小明今天听课专注，积极回答问题...\n\n【课后作业】\n完成课本第45页练习题1-5题'}
-              fullWidth
-              size="small"
-              sx={{ mb: 1.5 }}
-            />
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <Button
-                variant="contained"
-                startIcon={<AutoAwesomeIcon />}
-                onClick={handleStartAnalysis}
-                disabled={analyzing}
-                sx={{ textTransform: 'none' }}
-              >
-                {analyzing ? '分析中...' : 'AI 分析并应用'}
-              </Button>
-              <Typography variant="caption" color="text.secondary">
-                样本越完整，分析越准确。分析后可逐项勾选应用。
-              </Typography>
             </Stack>
           </CardContent>
         </Card>
@@ -1659,25 +1922,6 @@ export default function SettingsPage() {
           );
         })}
       </Menu>
-
-      {/* ========== 智能分析结果预览 Dialog ========== */}
-      <StyleAnalysisDialog
-        open={analysisDialogOpen}
-        analysis={analysisResult}
-        currentStyle={style}
-        currentModules={modules}
-        analyzing={analyzing}
-        error={analysisError}
-        onClose={() => {
-          // 分析进行中关闭时中止请求
-          if (analysisAbortRef.current) {
-            analysisAbortRef.current.abort();
-            analysisAbortRef.current = null;
-          }
-          setAnalysisDialogOpen(false);
-        }}
-        onApply={handleApplyAnalysis}
-      />
     </Box>
   );
 }

@@ -1090,27 +1090,48 @@ ${moduleInstructions}
     }
 
     /**
-     * 智能分析一段课堂反馈样本，反推系统的可配置项（语气/emoji/模块/标题/格式等）。
-     * 返回结构化 JSON，由前端展示预览并让用户勾选应用。
+     * 智能分析课堂反馈样本，反推系统的可配置项（语气/emoji/模块/标题/格式等）。
+     * 支持单样本（string）或多样本（string[]）综合分析。
+     * 多样本时 AI 会综合判断找出一致的配置；冲突字段返回 null。
      *
-     * @param {string} sampleText - 用户粘贴的完整反馈样本（含标题+正文）
+     * @param {string|string[]} samples - 反馈样本（含标题+正文）。字符串数组表示多样本
      * @param {object} [options]
      * @param {AbortSignal} [options.signal]
      * @returns {Promise<object>} 分析结果，字段对齐系统可配置项；无法推断的字段为 null
      */
-    static async analyzeFeedbackStyle(sampleText, { signal } = {}) {
+    static async analyzeFeedbackStyle(samples, { signal } = {}) {
         const apiKey = Storage.getApiKey();
         if (!apiKey) throw new Error('请先设置 API Key');
-        const trimmed = (sampleText || '').trim();
-        if (!trimmed) throw new Error('样本内容为空');
 
-        const systemPrompt = `你是一位课堂反馈文案分析专家。你需要分析用户提供的"课堂反馈样本"，反推出一套能复刻该样本风格的系统配置。
+        // 归一化为数组：单字符串视为单样本
+        const sampleArr = Array.isArray(samples)
+            ? samples.map(s => (s || '').trim()).filter(Boolean)
+            : [(samples || '').trim()].filter(Boolean);
+        if (sampleArr.length === 0) throw new Error('样本内容为空');
+
+        const isMulti = sampleArr.length > 1;
+
+        // 拼接样本：每个样本用分隔线标注"样本 N"
+        const samplesBlock = sampleArr.map((s, i) =>
+            `=== 样本 ${i + 1} ===\n${s}`
+        ).join('\n\n');
+
+        const systemPrompt = `你是一位课堂反馈文案分析专家。你需要分析用户提供的"课堂反馈样本"${isMulti ? '（可能多份）' : ''}，反推出一套能复刻该样本风格的系统配置。
 你必须严格输出 JSON，不要输出任何 JSON 之外的内容（不要 markdown 代码块标记、不要解释）。无法从样本中确定的字段一律返回 null。`;
 
-        const userPrompt = `请分析以下课堂反馈样本，反推系统配置。
+        const multiGuidance = isMulti ? `
+## 多样本分析要点
+用户提供了 ${sampleArr.length} 份样本。请综合分析所有样本：
+1. 一致性优先：所有样本都体现的配置才是高置信度推断
+2. 冲突处理：不同样本出现冲突的字段（如一份用 emoji 一份不用）一律返回 null，不要二选一
+3. 模块列表：以出现频次最高、覆盖最完整的样本为准；合并所有样本中出现过的模块名
+4. 字数范围：综合所有样本估算合理的 min/max 区间，而非单一样本的值
+5. 标题模板：从所有样本标题中归纳通用模板；若标题格式差异较大无法统一，返回 null` : '';
+
+        const userPrompt = `请分析以下课堂反馈样本${isMulti ? `（共 ${sampleArr.length} 份）` : ''}，反推系统配置。
 
 ## 课堂反馈样本
-${trimmed}
+${samplesBlock}
 
 ## 需要反推的配置字段（输出 JSON，字段名必须完全一致）
 
@@ -1149,7 +1170,7 @@ ${trimmed}
 2. 模块字数：估算每个模块内容的字数范围，给出合理的 min/max
 3. emoji 位置：仔细观察 emoji 出现的规律（标题里、内容里、模块末尾）
 4. 标题模板：尽量用占位符还原样本标题的拼接方式，保持原有分隔符
-5. 无法确定的字段必须返回 null，不要臆测`;
+5. 无法确定的字段必须返回 null，不要臆测${multiGuidance}`;
 
         const content = await this.chatCompletion([
             { role: 'system', content: systemPrompt },
