@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, IconButton, Button, TextField, MenuItem, Select, InputLabel,
   FormControl, Card, CardContent, Avatar, Chip, Fab, Checkbox, Menu, ListItemIcon,
-  ListItemText, MenuList, Paper, Stack
+  ListItemText, MenuList, Paper, Stack, Grid
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddIcon from '@mui/icons-material/Add';
@@ -250,83 +250,86 @@ export default function StudentsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Stack spacing={1}>
+        // 电脑端多列网格：手机1列 / 平板2列 / 桌面3列，充分利用横向空间
+        <Grid container spacing={1.5}>
           {students.map(student => {
             const isSelected = selectedStudentIds.has(student.id);
             const subjects = store.getStudentSubjects(student.id);
             return (
-              <Card
-                key={student.id}
-                variant="outlined"
-                onClick={() => onStudentClick(student.id)}
-                sx={{
-                  cursor: 'pointer',
-                  borderStyle: isGroupMode && isSelected ? 'solid' : 'outlined',
-                  borderColor: isGroupMode && isSelected ? 'primary.main' : 'divider',
-                  borderWidth: isGroupMode && isSelected ? 2 : 1,
-                  bgcolor: isGroupMode && isSelected ? 'action.selected' : 'background.paper',
-                  '&:hover': { boxShadow: 2 },
-                }}
-              >
-                <CardContent sx={{ display: 'flex', alignItems: 'center', py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  {/* 小组模式下显示 Checkbox */}
-                  {isGroupMode ? (
-                    <Checkbox
-                      checked={isSelected}
-                      onClick={(e) => { e.stopPropagation(); onStudentClick(student.id); }}
-                      size="small"
-                      sx={{ mr: 1 }}
-                    />
-                  ) : null}
-                  {/* 头像 */}
-                  <Avatar sx={{ background: getAvatarGradient(student.name), mr: 1.5, fontWeight: 500 }}>
-                    {student.name.charAt(0)}
-                  </Avatar>
-                  {/* 信息 */}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <Typography component="span" sx={{ fontWeight: 500 }}>{student.name}</Typography>
-                      {student.isTrial ? (
-                        <Chip label="试听" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: 12 }} />
-                      ) : null}
-                      {student.grade ? (
-                        <Chip label={student.grade} size="small" variant="outlined" sx={{ height: 20, fontSize: 12 }} />
-                      ) : null}
-                    </Stack>
-                    {subjects.length > 0 ? (
-                      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                        {subjects.map(s => (
-                          <Chip
-                            key={s.id}
-                            label={s.name}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: 12,
-                              bgcolor: hexToRgba(s.color, 0.12),
-                              color: s.color,
-                              border: 'none',
-                            }}
-                          />
-                        ))}
-                      </Stack>
+              <Grid item xs={12} sm={6} md={4} key={student.id}>
+                <Card
+                  variant="outlined"
+                  onClick={() => onStudentClick(student.id)}
+                  sx={{
+                    cursor: 'pointer',
+                    height: '100%',
+                    borderStyle: isGroupMode && isSelected ? 'solid' : 'outlined',
+                    borderColor: isGroupMode && isSelected ? 'primary.main' : 'divider',
+                    borderWidth: isGroupMode && isSelected ? 2 : 1,
+                    bgcolor: isGroupMode && isSelected ? 'action.selected' : 'background.paper',
+                    '&:hover': { boxShadow: 2 },
+                  }}
+                >
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    {/* 小组模式下显示 Checkbox */}
+                    {isGroupMode ? (
+                      <Checkbox
+                        checked={isSelected}
+                        onClick={(e) => { e.stopPropagation(); onStudentClick(student.id); }}
+                        size="small"
+                        sx={{ mr: 1 }}
+                      />
                     ) : null}
-                  </Box>
-                  {/* 右侧操作 */}
-                  {!isGroupMode ? (
-                    <IconButton
-                      onClick={(e) => openMenu(e, student.id)}
-                      aria-label={`${student.name} 的操作菜单`}
-                      size="small"
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
-                  ) : null}
-                </CardContent>
-              </Card>
+                    {/* 头像 */}
+                    <Avatar sx={{ background: getAvatarGradient(student.name), mr: 1.5, fontWeight: 500 }}>
+                      {student.name.charAt(0)}
+                    </Avatar>
+                    {/* 信息 */}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Typography component="span" sx={{ fontWeight: 500 }}>{student.name}</Typography>
+                        {student.isTrial ? (
+                          <Chip label="试听" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: 12 }} />
+                        ) : null}
+                        {student.grade ? (
+                          <Chip label={student.grade} size="small" variant="outlined" sx={{ height: 20, fontSize: 12 }} />
+                        ) : null}
+                      </Stack>
+                      {subjects.length > 0 ? (
+                        <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                          {subjects.map(s => (
+                            <Chip
+                              key={s.id}
+                              label={s.name}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: 12,
+                                bgcolor: hexToRgba(s.color, 0.12),
+                                color: s.color,
+                                border: 'none',
+                              }}
+                            />
+                          ))}
+                        </Stack>
+                      ) : null}
+                    </Box>
+                    {/* 右侧操作 */}
+                    {!isGroupMode ? (
+                      <IconButton
+                        onClick={(e) => openMenu(e, student.id)}
+                        aria-label={`${student.name} 的操作菜单`}
+                        size="small"
+                      >
+                        <MoreVertIcon />
+                      </IconButton>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              </Grid>
             );
           })}
-        </Stack>
+        </Grid>
       )}
 
       {/* 添加学生 FAB */}

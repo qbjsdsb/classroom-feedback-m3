@@ -572,7 +572,12 @@ export default function SettingsPage() {
         <Typography variant="h6" sx={{ flexGrow: 1 }}>⚙️ 系统设置</Typography>
       </Stack>
 
-      <Stack spacing={2}>
+      {/* 电脑端2列 masonry：CSS multi-column，卡片按高度自动流动填充，避免单列过长 */}
+      <Box sx={{
+        columnCount: { xs: 1, md: 2 },
+        columnGap: 2,
+        '& > .MuiCard-root': { mb: 2, breakInside: 'avoid', display: 'block' },
+      }}>
         {/* ========== 1. API Key 设置 ========== */}
         <Card variant="outlined">
           <CardHeader
@@ -1075,24 +1080,25 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ========== 保存按钮（固定底部） ========== */}
-        <Box sx={{ position: 'sticky', bottom: 16, zIndex: 10 }}>
-          <Button
-            variant="contained"
-            size="medium"
-            startIcon={<SaveIcon />}
-            onClick={handleSave}
-            fullWidth
-            sx={{ textTransform: 'none', borderRadius: 16 }}
-          >
-            保存设置
-          </Button>
-        </Box>
+      </Box>
 
-        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', pb: 2 }}>
-          课堂反馈助手 M3 · 纯前端应用，数据保存在本地
-        </Typography>
-      </Stack>
+      {/* ========== 保存按钮（固定底部，独立一行 full width） ========== */}
+      <Box sx={{ position: 'sticky', bottom: 16, zIndex: 10, mt: 2 }}>
+        <Button
+          variant="contained"
+          size="medium"
+          startIcon={<SaveIcon />}
+          onClick={handleSave}
+          fullWidth
+          sx={{ textTransform: 'none', borderRadius: 16 }}
+        >
+          保存设置
+        </Button>
+      </Box>
+
+      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', pb: 2 }}>
+        课堂反馈助手 M3 · 纯前端应用，数据保存在本地
+      </Typography>
 
       {/* ========== Prompt 模板编辑 Dialog ========== */}
       <Dialog open={templateFormOpen} onClose={() => setTemplateFormOpen(false)} fullWidth maxWidth="sm">
