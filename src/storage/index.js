@@ -79,7 +79,20 @@ const DEFAULT_STYLE = {
 
     // 附件说明占位（默认关闭，开启后在反馈末尾追加固定文字提示家长查收照片/视频）
     useAttachmentHint: false,
-    attachmentHint: '\n\n📷 课堂照片/视频已单独发送，请注意查收'
+    attachmentHint: '\n\n📷 课堂照片/视频已单独发送，请注意查收',
+
+    // ===== 导出格式模板化（第二期 P1-6） =====
+    // 导出文件头部标题行（默认 '课堂反馈记录'，可改成机构名）
+    exportHeader: '课堂反馈记录',
+    // 头部标题下方的分隔线（默认 16 个等号）
+    exportTitleSeparator: '================',
+    // 每条反馈记录之间的分隔线（默认 30 个 ─）
+    exportEntrySeparator: '─'.repeat(30),
+
+    // ===== 模块默认描述表 + icon 映射表可覆盖（第二期 P1-7） =====
+    // 为空对象时回退到代码内置硬编码映射；非空时按模块名覆盖
+    moduleIconOverrides: {},
+    moduleDescriptionOverrides: {}
 };
 
 const DEFAULT_THEME = 'default'; // default, dark, warm, green

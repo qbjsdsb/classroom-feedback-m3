@@ -54,8 +54,9 @@ import { useThemeMode } from '../contexts/ThemeContext';
 import { UI } from '../utils/ui';
 import AiService from '../services/aiService';
 import { getRecorderEngine } from '../services/recorderHolder';
-import { exportData, importData } from '../utils/dataTransfer';
+import { exportData, importData, exportConfig, importConfig } from '../utils/dataTransfer';
 import { generateFeedbackTitle, getModuleIcon } from '../utils/feedback';
+import { INSTITUTION_TEMPLATES } from '../data/institutionTemplates';
 
 // 智能分析：可推断项的中文标签映射（用于改动反馈卡片展示）
 const ANALYSIS_LABELS = {
@@ -608,6 +609,74 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // ========== 机构配置模板：一键应用整套配置（复用撤销机制） ==========
+  const handleApplyTemplate = useCallback((template) => {
+    UI.showConfirm(`确定应用「${template.name}」模板？将覆盖当前的反馈风格、模块和字数设置，可撤销。`, () => {
+      // 应用前快照（与智能分析共用）
+      const snapshot = {
+        style: { ...style },
+        modules: modules.map(m => ({ ...m })),
+        moduleLengths: { ...moduleLengths },
+        customPrompt,
+      };
+
+      // 合并 style：以当前 style 为底，模板字段覆盖
+      const newStyle = { ...style, ...template.style };
+      // 模块和字数：替换模式
+      const newModules = template.modules.map(m => ({ ...m }));
+      const newLengths = { ...template.moduleLengths };
+
+      // 收集改动用于反馈卡片
+      const changes = [];
+      const inferable = (v) => v !== null && v !== undefined && v !== '';
+      for (const key of Object.keys(template.style)) {
+        if (inferable(template.style[key])) {
+          const oldVal = style[key];
+          const newVal = template.style[key];
+          if (String(oldVal ?? '') !== String(newVal)) {
+            changes.push({
+              key,
+              label: ANALYSIS_LABELS[key] || key,
+              oldValue: formatValue(key, oldVal),
+              newValue: formatValue(key, newVal),
+            });
+          }
+        }
+      }
+      // 模块整体改动
+      const oldNames = modules.map(m => m.name).join('、') || '（空）';
+      const newNames = newModules.map(m => m.name).join('、') || '（空）';
+      if (oldNames !== newNames) {
+        changes.push({
+          key: 'modules',
+          label: ANALYSIS_LABELS.modules,
+          oldValue: `${modules.length} 个：${oldNames}`,
+          newValue: `${newModules.length} 个：${newNames}`,
+        });
+      }
+
+      // 持久化
+      Storage.saveStyle(newStyle);
+      Storage.saveModules(newModules);
+      setStyle(newStyle);
+      setModules(newModules);
+      setModuleLengths(newLengths);
+
+      // 显示改动反馈 Alert（复用智能分析的 Alert 机制）
+      setAnalysisSnapshot(snapshot);
+      setAnalysisChanges(changes);
+      setAnalysisAlertVisible(true);
+      setAnalysisAlertExpanded(false);
+      if (analysisAlertTimerRef.current) clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = setTimeout(() => {
+        setAnalysisAlertVisible(false);
+        analysisAlertTimerRef.current = null;
+      }, 30000);
+
+      UI.showToast(`已应用「${template.name}」模板，可撤销`);
+    });
+  }, [style, modules, moduleLengths, customPrompt, Storage]);
+
   // 卸载时中止进行中的分析请求 + 清理 Alert 定时器
   useEffect(() => {
     return () => {
@@ -766,6 +835,7 @@ export default function SettingsPage() {
 
   // ========== 数据导入导出 ==========
   const fileInputRef = useRef(null);
+  const configFileInputRef = useRef(null);
 
   const handleExport = useCallback(() => {
     exportData();
@@ -781,6 +851,24 @@ export default function SettingsPage() {
     const file = e.target.files[0];
     if (!file) return;
     importData(file).catch(() => {});
+    e.target.value = '';
+  }, []);
+
+  // 仅导入配置（不含学生/历史），用于换机构场景
+  const handleExportConfig = useCallback(() => {
+    exportConfig();
+  }, []);
+
+  const handleImportConfigClick = useCallback(() => {
+    configFileInputRef.current?.click();
+  }, []);
+
+  const handleImportConfigFile = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    UI.showConfirm('导入配置将覆盖当前的反馈风格、模块、科目和模板设置（不影响学生和反馈历史），是否继续？', () => {
+      importConfig(file).catch(() => {});
+    });
     e.target.value = '';
   }, []);
 
@@ -1088,6 +1176,40 @@ export default function SettingsPage() {
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
             分析后所有可推断的配置会被自动覆盖，并在顶部弹出改动反馈，可一键撤销
           </Typography>
+        </CardContent>
+      </Card>
+
+      {/* ========== 机构配置模板（一键套用整套配置） ========== */}
+      <Card variant="outlined" sx={{ mb: 2 }}>
+        <CardHeader
+          avatar={<SchoolIcon color="primary" />}
+          title="机构配置模板"
+          titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
+          subheader="按机构类型一键套用预设配置，可撤销"
+        />
+        <CardContent sx={{ pt: 0 }}>
+          <Stack spacing={1}>
+            {INSTITUTION_TEMPLATES.map(tpl => (
+              <Paper key={tpl.id} variant="outlined" sx={{ p: 1.5 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{tpl.name}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      {tpl.description}
+                    </Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleApplyTemplate(tpl)}
+                    sx={{ textTransform: 'none', minWidth: 80 }}
+                  >
+                    应用
+                  </Button>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
         </CardContent>
       </Card>
 
@@ -1857,6 +1979,15 @@ export default function SettingsPage() {
               <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExport} sx={{ flex: 1, textTransform: 'none' }}>导出</Button>
               <Button variant="outlined" size="small" startIcon={<UploadIcon />} onClick={handleImportClick} sx={{ flex: 1, textTransform: 'none' }}>导入</Button>
               <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportFile} style={{ display: 'none' }} />
+            </Stack>
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              配置迁移（换机构用，不含学生和历史）
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportConfig} sx={{ flex: 1, textTransform: 'none' }}>导出配置</Button>
+              <Button variant="outlined" size="small" startIcon={<UploadIcon />} onClick={handleImportConfigClick} sx={{ flex: 1, textTransform: 'none' }}>导入配置</Button>
+              <input type="file" accept=".json" ref={configFileInputRef} onChange={handleImportConfigFile} style={{ display: 'none' }} />
             </Stack>
             <Button
               variant="outlined"

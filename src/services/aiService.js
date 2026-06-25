@@ -528,6 +528,15 @@ ${segment}
             if (mod.prompt && mod.prompt.trim()) return mod.prompt.trim();
             if (mod.description && mod.description.trim()) return mod.description.trim();
         }
+        // 读取 style.moduleDescriptionOverrides 覆盖表（第二期 P1-7）
+        try {
+            const style = Storage.getStyle();
+            if (style && style.moduleDescriptionOverrides && style.moduleDescriptionOverrides[moduleName]) {
+                return style.moduleDescriptionOverrides[moduleName];
+            }
+        } catch (e) {
+            // 忽略
+        }
         // 回退到按模块名硬编码的默认描述
         const map = {
             '课堂内容': '总结本节课讲解的主要知识点和教学内容',

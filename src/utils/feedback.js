@@ -161,8 +161,10 @@ export function resolveModuleWrap(wrap) {
 
 /**
  * 模块图标映射
- * 优先读取用户在 Storage.modules 中为该模块配置的 icon；
- * 未配置则回退到按模块名硬编码的默认图标。
+ * 优先级：
+ * 1. 用户在 Storage.modules 中为该模块配置的 icon
+ * 2. style.moduleIconOverrides 中的覆盖值
+ * 3. 按模块名硬编码的默认图标
  */
 export function getModuleIcon(moduleName) {
     // feedback.js 顶部已 import Storage，此处直接读取用户配置
@@ -172,6 +174,15 @@ export function getModuleIcon(moduleName) {
         if (mod && mod.icon) return mod.icon;
     } catch (e) {
         // Storage 未初始化等异常时降级到默认映射
+    }
+    // 读取 style 中的覆盖表
+    try {
+        const style = Storage.getStyle();
+        if (style && style.moduleIconOverrides && style.moduleIconOverrides[moduleName]) {
+            return style.moduleIconOverrides[moduleName];
+        }
+    } catch (e) {
+        // 忽略
     }
     const iconMap = {
         '课堂内容': '📖',
