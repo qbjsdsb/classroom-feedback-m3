@@ -4,6 +4,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { RecorderEngine } from '../services/recorderEngine';
+import { setRecorderEngine } from '../services/recorderHolder';
 import { UI } from '../utils/ui';
 import { useData } from '../store/DataContext';
 import { useSession } from '../store/SessionContext';
@@ -185,6 +186,17 @@ export function useRecorder() {
       getProviderName: (p) => (p === 'whisper' ? '本地AI识别' : '浏览器识别'),
     });
   }
+
+  // ========== 将 engine 实例注册到全局 holder（供 SettingsPage 访问日志/预加载） ==========
+  useEffect(() => {
+    if (engineRef.current) {
+      setRecorderEngine(engineRef.current);
+    }
+    return () => {
+      // 卸载时清空 holder，避免 SettingsPage 访问到已销毁的实例
+      setRecorderEngine(null);
+    };
+  }, [ready]);
 
   // ========== 卸载时清理课堂计时器 ==========
   useEffect(() => {
