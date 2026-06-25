@@ -72,6 +72,16 @@ const ANALYSIS_LABELS = {
   teacherName: '老师名',
   moduleWrap: '模块包裹符号',
   moduleSeparator: '模块分隔符',
+  commonModules: '公共模块',
+  groupAddressTerm: '集体称谓',
+  useOpening: '启用开场白',
+  feedbackOpening: '开场白',
+  useClosing: '启用结尾话术',
+  feedbackClosing: '结尾话术',
+  studentAddress: '学生称呼',
+  parentAddress: '家长称呼',
+  useAttachmentHint: '附件提示',
+  attachmentHint: '附件提示文本',
   customPrompt: '整体备注',
   modules: '模块列表',
 };
@@ -461,6 +471,10 @@ export default function SettingsPage() {
         'nameShorten', 'includeParentHelp', 'strictInput',
         'titleTemplate', 'titleDateFormat', 'institutionName', 'teacherName',
         'moduleWrap', 'moduleSeparator',
+        'commonModules', 'groupAddressTerm',
+        'useOpening', 'feedbackOpening', 'useClosing', 'feedbackClosing',
+        'studentAddress', 'parentAddress',
+        'useAttachmentHint', 'attachmentHint',
       ];
       for (const key of styleKeys) {
         if (inferable(result[key])) {
@@ -1402,6 +1416,98 @@ export default function SettingsPage() {
                   })}
                 </Stack>
               </Box>
+
+              <Divider />
+
+              {/* 学生/家长称呼（第一期 P0-3） */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>学生/家长称呼</Typography>
+                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                  <TextField
+                    label="学生称呼模板"
+                    value={style.studentAddress || ''}
+                    onChange={(e) => setStyle({ ...style, studentAddress: e.target.value })}
+                    size="small"
+                    fullWidth
+                    placeholder="留空=沿用姓名规则；如 {name}同学"
+                  />
+                  <TextField
+                    label="家长称呼"
+                    value={style.parentAddress || ''}
+                    onChange={(e) => setStyle({ ...style, parentAddress: e.target.value })}
+                    size="small"
+                    fullWidth
+                    placeholder="留空=不指定；如 家长您好 / {student}妈妈"
+                  />
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  学生称呼占位符 {`{name}`}（如 "{`{name}`}同学" → "小明同学"）；家长称呼占位符 {`{student}`}/{`{name}`}。留空则不注入额外称呼指令。
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {/* 开场白/结尾话术（第一期 P0-2） */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>开场白 / 结尾话术</Typography>
+                <FormControlLabel
+                  control={<Switch checked={!!style.useOpening} onChange={(e) => setStyle({ ...style, useOpening: e.target.checked })} />}
+                  label="启用开场白"
+                />
+                {style.useOpening && (
+                  <TextField
+                    value={style.feedbackOpening || ''}
+                    onChange={(e) => setStyle({ ...style, feedbackOpening: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="如：{家长}您好，我是{老师}老师，向您反馈{学生}今天{科目}课的情况"
+                    sx={{ mt: 1, mb: 1 }}
+                  />
+                )}
+                <FormControlLabel
+                  control={<Switch checked={!!style.useClosing} onChange={(e) => setStyle({ ...style, useClosing: e.target.checked })} />}
+                  label="启用结尾话术"
+                  sx={{ mt: style.useOpening ? 0 : 1 }}
+                />
+                {style.useClosing && (
+                  <TextField
+                    value={style.feedbackClosing || ''}
+                    onChange={(e) => setStyle({ ...style, feedbackClosing: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="如：如有疑问随时联系，感谢配合！"
+                    sx={{ mt: 1, mb: 1 }}
+                  />
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  占位符：{`{家长} {老师} {学生} {科目} {日期} {机构}`}（复制/导出时替换，缺失则留空）
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {/* 附件提示（第一期 P0-5） */}
+              <Box>
+                <FormControlLabel
+                  control={<Switch checked={!!style.useAttachmentHint} onChange={(e) => setStyle({ ...style, useAttachmentHint: e.target.checked })} />}
+                  label="在反馈末尾追加附件提示（照片/视频）"
+                />
+                {style.useAttachmentHint && (
+                  <TextField
+                    value={style.attachmentHint ?? ''}
+                    onChange={(e) => setStyle({ ...style, attachmentHint: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    sx={{ mt: 1 }}
+                  />
+                )}
+              </Box>
             </Stack>
           </CardContent>
         </Card>
@@ -1578,6 +1684,41 @@ export default function SettingsPage() {
                   </Select>
                 </FormControl>
               </Stack>
+            </Box>
+
+            {/* 小组模式：公共模块 + 集体称谓 */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>小组模式设置</Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true, alignItems: 'center' }}>
+                <FormControl size="small" sx={{ minWidth: 220 }}>
+                  <InputLabel>公共模块（多选）</InputLabel>
+                  <Select
+                    multiple
+                    value={Array.isArray(style.commonModules) ? style.commonModules : ['课堂内容', '课后作业']}
+                    label="公共模块（多选）"
+                    onChange={(e) => setStyle({ ...style, commonModules: e.target.value })}
+                    renderValue={(selected) => (selected && selected.length ? selected.join('、') : '无')}
+                  >
+                    {modules.map(m => (
+                      <MuiMenuItem key={m.name} value={m.name}>
+                        <Checkbox checked={(style.commonModules || []).includes(m.name)} />
+                        <ListItemText primary={m.name} />
+                      </MuiMenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  label="集体称谓"
+                  value={style.groupAddressTerm || '同学们'}
+                  onChange={(e) => setStyle({ ...style, groupAddressTerm: e.target.value })}
+                  sx={{ width: 160 }}
+                  helperText="替换学生姓名"
+                />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                公共模块在小组模式下对所有学生保持一致内容，姓名替换为集体称谓
+              </Typography>
             </Box>
 
             <Divider sx={{ mb: 1.5 }} />

@@ -186,19 +186,27 @@ export function getModuleIcon(moduleName) {
 }
 
 /**
- * 统一公共模块：课堂内容和课后作业对所有学生保持一致
+ * 统一公共模块：可配置的公共模块对所有学生保持一致
  * 提取自原 app.js _unifyCommonModules，正则规则 1:1 保留
  *
- * 策略：取第一位学生的"课堂内容"和"课后作业"，用 5 条正则把学生姓名替换为"同学们"，
- * 然后统一应用到所有学生的这两个模块上。
+ * 策略：取第一位学生的公共模块内容，用 5 条正则把学生姓名替换为集体称谓，
+ * 然后统一应用到所有学生的这些模块上。
+ *
+ * 公共模块列表和称谓均从 style 读取（默认 ['课堂内容','课后作业'] + '同学们'，
+ * 向后兼容旧调用）。
  *
  * @param {Array<{studentName: string, feedback: Array<{module: string, content: string}>}>} feedbacks
+ * @param {object} [style] - 可选，Storage.getStyle()；不传则用默认值
  * @returns {Array} 统一后的 feedbacks（深拷贝）
  */
-export function unifyCommonModules(feedbacks) {
+export function unifyCommonModules(feedbacks, style) {
     if (!feedbacks || feedbacks.length < 2) return feedbacks;
 
-    const COMMON_MODULES = ['课堂内容', '课后作业'];
+    // 从 style 读取公共模块和称谓，向后兼容
+    const COMMON_MODULES = (style && Array.isArray(style.commonModules))
+        ? style.commonModules
+        : ['课堂内容', '课后作业'];
+    const addressTerm = (style && style.groupAddressTerm) || '同学们';
     const first = feedbacks[0];
 
     // 收集所有学生姓名及其可能的变体（全名、后两个字）
@@ -218,25 +226,25 @@ export function unifyCommonModules(feedbacks) {
     for (const modName of COMMON_MODULES) {
         const mod = first.feedback.find(f => f.module === modName);
         if (mod) {
-            // 过滤掉公共模块中的学生姓名（兜底处理）
+            // 过滤掉公共模块中的学生姓名（兜底处理），替换为集体称谓
             let cleanedContent = mod.content;
             for (const pattern of namePatterns) {
                 const p = escapeRegex(pattern);
                 // 1. 替换 "请pattern..." 模式
                 const regex1 = new RegExp(`请${p}([在需应]|同学|完成|独立|复习|梳理|注意|重点|及时)`, 'g');
-                cleanedContent = cleanedContent.replace(regex1, '请同学们$1');
+                cleanedContent = cleanedContent.replace(regex1, `请${addressTerm}$1`);
                 // 2. 替换 "pattern的" 模式（前面不能是汉字，避免"说明的"被"明"误替换）
                 const regex2 = new RegExp(`(?<![\\u4e00-\\u9fff])${p}的`, 'g');
-                cleanedContent = cleanedContent.replace(regex2, '同学们的');
+                cleanedContent = cleanedContent.replace(regex2, `${addressTerm}的`);
                 // 3. 替换 "pattern在..." 模式（pattern在课堂上、pattern在课后）
                 const regex3 = new RegExp(`(?<![\\u4e00-\\u9fff])${p}在(课堂|课后|本节课|课堂中)`, 'g');
-                cleanedContent = cleanedContent.replace(regex3, '同学们在$1');
+                cleanedContent = cleanedContent.replace(regex3, `${addressTerm}在$1`);
                 // 4. 替换 "pattern表现"、"pattern回答" 等动词搭配
                 const regex4 = new RegExp(`(?<![\\u4e00-\\u9fff])${p}(表现|回答|提问|参与|完成|掌握|理解|笔记|专注|积极|安静)`, 'g');
-                cleanedContent = cleanedContent.replace(regex4, '同学们$1');
+                cleanedContent = cleanedContent.replace(regex4, `${addressTerm}$1`);
                 // 5. 替换 "pattern需要"、"pattern应" 模式
                 const regex5 = new RegExp(`(?<![\\u4e00-\\u9fff])${p}(需要|应|可以|建议|需)`, 'g');
-                cleanedContent = cleanedContent.replace(regex5, '同学们$1');
+                cleanedContent = cleanedContent.replace(regex5, `${addressTerm}$1`);
             }
             commonContents[modName] = cleanedContent;
         }
@@ -291,23 +299,67 @@ export async function copyToClipboard(text) {
 
 /**
  * 拼接反馈为纯文本（用于复制/导出）
- * 格式：标题 + 空行 + 各模块「包裹符号+模块名+包裹符号」\n内容，模块间用分隔符分隔
+ * 格式：[开场白\n\n]标题 + 空行 + 各模块「包裹符号+模块名+包裹符号」\n内容[分隔符 附件提示][\n\n结尾话术]
  *
  * 支持自定义包裹符号（style.moduleWrap）和模块间分隔符（style.moduleSeparator）。
- * 默认值（'【】' / '\n\n'）与原硬编码行为一致，保证旧调用方兼容。
+ * 支持开场白（style.useOpening + style.feedbackOpening）和结尾话术（style.useClosing + style.feedbackClosing）。
+ * 支持附件提示（style.useAttachmentHint + style.attachmentHint）。
+ * 默认值与原硬编码行为一致，保证旧调用方兼容。
+ *
+ * 开场白/结尾占位符：{家长} {老师} {学生} {科目} {日期} {机构}
+ * 占位符替换时若 context 缺失对应字段，替换为空字符串。
  *
  * @param {Array<{module: string, content: string}>} feedback - 反馈数组
  * @param {string} title - 标题
  * @param {object} [style] - 可选，Storage.getStyle() 返回的风格对象
+ * @param {object} [context] - 可选，占位符上下文 {student, parent, teacher, subject, date, institution}
  * @returns {string} 拼接后的文本
  */
-export function buildFeedbackText(feedback, title, style) {
+export function buildFeedbackText(feedback, title, style, context) {
     const wrap = resolveModuleWrap(style?.moduleWrap);
     const sep = style?.moduleSeparator ?? '\n\n';
     const body = (feedback || [])
         .map(f => `${wrap.open}${f.module}${wrap.close}\n${f.content}`)
         .join(sep);
-    return `${title}\n\n${body}`;
+
+    // 占位符替换辅助函数
+    const fillPlaceholders = (tpl) => {
+        if (!tpl) return '';
+        const ctx = context || {};
+        return tpl
+            .replaceAll('{家长}', ctx.parent || '')
+            .replaceAll('{老师}', ctx.teacher || (style && style.teacherName) || '')
+            .replaceAll('{学生}', ctx.student || '')
+            .replaceAll('{科目}', ctx.subject || '')
+            .replaceAll('{日期}', ctx.date || '')
+            .replaceAll('{机构}', ctx.institution || (style && style.institutionName) || '');
+    };
+
+    // 开场白（在标题之前）
+    let opening = '';
+    if (style && style.useOpening && style.feedbackOpening) {
+        opening = fillPlaceholders(style.feedbackOpening).trim();
+    }
+
+    // 结尾话术（在所有内容之后）
+    let closing = '';
+    if (style && style.useClosing && style.feedbackClosing) {
+        closing = fillPlaceholders(style.feedbackClosing).trim();
+    }
+
+    // 附件提示（追加在正文末尾，结尾话术之前）
+    let attachmentHint = '';
+    if (style && style.useAttachmentHint && style.attachmentHint) {
+        attachmentHint = style.attachmentHint;
+    }
+
+    // 拼装：[开场白\n\n]标题\n\n正文[附件提示][\n\n结尾]
+    let result = '';
+    if (opening) result += opening + '\n\n';
+    result += `${title}\n\n${body}`;
+    if (attachmentHint) result += attachmentHint;
+    if (closing) result += '\n\n' + closing;
+    return result;
 }
 
 /**

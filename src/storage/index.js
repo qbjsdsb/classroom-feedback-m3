@@ -56,7 +56,30 @@ const DEFAULT_STYLE = {
     // 模块名包裹符号：'【】' | '[]' | '（）' | '·' | 'none' | 自定义双字符
     moduleWrap: '【】',
     // 模块间分隔符
-    moduleSeparator: '\n\n'
+    moduleSeparator: '\n\n',
+
+    // ===== 通用化扩展（第一期） =====
+    // 公共模块（小组模式下对所有学生保持一致内容的模块名列表）
+    // 默认 ['课堂内容', '课后作业']，向后兼容；机构可自定义
+    commonModules: ['课堂内容', '课后作业'],
+    // 小组模式公共模块的集体称谓（替换学生姓名）
+    groupAddressTerm: '同学们',
+
+    // 反馈开场白/结尾话术（默认关闭，开启后拼接到反馈首尾）
+    useOpening: false,
+    feedbackOpening: '',   // 支持 {家长} {老师} {学生} {科目} {日期} 占位符
+    useClosing: false,
+    feedbackClosing: '',
+
+    // 学生/家长称呼方式（默认空=沿用现有 nameShorten 逻辑；非空时按模板生成称呼）
+    // studentAddress 占位符 {name}，如 '{name}同学'；为空时不注入额外称呼指令
+    studentAddress: '',
+    // parentAddress 如 '家长您好' / '{student}妈妈'；为空时不注入
+    parentAddress: '',
+
+    // 附件说明占位（默认关闭，开启后在反馈末尾追加固定文字提示家长查收照片/视频）
+    useAttachmentHint: false,
+    attachmentHint: '\n\n📷 课堂照片/视频已单独发送，请注意查收'
 };
 
 const DEFAULT_THEME = 'default'; // default, dark, warm, green

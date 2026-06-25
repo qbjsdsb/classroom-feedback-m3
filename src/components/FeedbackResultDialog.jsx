@@ -20,7 +20,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
   matchStudentByName, generateFeedbackTitle, getModuleIcon, resolveModuleWrap,
-  unifyCommonModules, copyToClipboard, buildFeedbackText,
+  unifyCommonModules, copyToClipboard, buildFeedbackText, getDateStr, getDisplayName,
 } from '../utils/feedback';
 import { UI } from '../utils/ui';
 
@@ -68,8 +68,8 @@ export default function FeedbackResultDialog(props) {
     if (!open) return;
 
     if (mode === 'group' && groupFeedbacksProp && groupFeedbacksProp.length > 0) {
-      // 统一公共模块并深拷贝
-      const unified = unifyCommonModules(groupFeedbacksProp);
+      // 统一公共模块并深拷贝（传入 style 以读取 commonModules 和 groupAddressTerm）
+      const unified = unifyCommonModules(groupFeedbacksProp, style);
       // 深拷贝确保编辑不影响外部 props
       const cloned = unified.map(fb => ({
         studentName: fb.studentName,
@@ -231,7 +231,18 @@ export default function FeedbackResultDialog(props) {
     isCopyingRef.current = true;
     setCopying(true);
 
-    const text = buildFeedbackText(currentFeedback, currentTitle, style);
+    // 构造开场白/结尾占位符上下文（缺失字段替换为空字符串）
+    const studentName = currentStudentObj ? getDisplayName(currentStudentObj.name, style) : '';
+    const ctx = {
+      student: studentName,
+      subject: subject ? subject.name : '',
+      teacher: (style && style.teacherName) || '',
+      date: getDateStr(style),
+      institution: (style && style.institutionName) || '',
+      // 家长称呼占位符：简单回退为"家长"
+      parent: '家长',
+    };
+    const text = buildFeedbackText(currentFeedback, currentTitle, style, ctx);
     const ok = await copyToClipboard(text);
     if (ok) {
       UI.showToast('已复制到剪贴板');
@@ -244,7 +255,7 @@ export default function FeedbackResultDialog(props) {
       isCopyingRef.current = false;
       setCopying(false);
     }, 300);
-  }, [currentFeedback, currentTitle, style]);
+  }, [currentFeedback, currentTitle, style, currentStudentObj, subject]);
 
   // ========== 重新生成 ==========
   const handleRegenerate = useCallback(() => {

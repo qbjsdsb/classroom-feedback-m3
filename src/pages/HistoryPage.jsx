@@ -24,7 +24,7 @@ import { UI } from '../utils/ui';
 import AiService from '../services/aiService';
 import {
   generateFeedbackTitle, getModuleIcon, resolveModuleWrap,
-  copyToClipboard, buildFeedbackText,
+  copyToClipboard, buildFeedbackText, getDateStr, getDisplayName,
 } from '../utils/feedback';
 import { adaptColorForTheme } from '../utils/color';
 
@@ -162,7 +162,16 @@ export default function HistoryPage() {
       getStudentById: store.getStudentById.bind(store),
       style,
     });
-    const text = buildFeedbackText(item.feedback || [], title, style);
+    // 构造开场白/结尾占位符上下文
+    const ctx = {
+      student: getDisplayName(currentStudent.name, style),
+      subject: subject ? subject.name : '',
+      teacher: (style && style.teacherName) || '',
+      date: getDateStr(style),
+      institution: (style && style.institutionName) || '',
+      parent: '家长',
+    };
+    const text = buildFeedbackText(item.feedback || [], title, style, ctx);
     const ok = await copyToClipboard(text);
     if (ok) UI.showToast('已复制到剪贴板');
     else UI.showToast('复制失败，请手动复制');

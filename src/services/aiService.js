@@ -69,6 +69,9 @@ class AiService {
             ? '在课后作业模块中，可以适当建议家长协助监督。'
             : '不要在反馈中提及"请家长协助"、"请家长监督"、"请家长提醒"等类似内容。';
         const customReq = style.customPrompt ? `\n\n## 用户自定义要求\n${style.customPrompt}` : '';
+        // 学生/家长称呼指令（可选；为空时不注入，沿用姓名处理规则）
+        const studentShort = studentName.length >= 3 ? studentName.slice(-2) : studentName;
+        const addressReq = this.getAddressInstructions(style, studentName, studentShort);
 
         // 获取 Prompt 模板
         let promptTemplateReq = '';
@@ -150,7 +153,8 @@ ${processedTranscript}
 6. ${parentReq}
 7. ${nameInstruction}
 8. ${formatReq}
-9. ${this.getLengthGuidance(transcript)}
+9. ${addressReq}
+10. ${this.getLengthGuidance(transcript)}
 ${subjectTemplateReq}
 ${promptTemplateReq}
 ${customReq}
@@ -242,6 +246,48 @@ ${moduleInstructions}
             return '输出格式：对于内容较多的模块（如课堂内容、薄弱环节），可以使用 bullet point（·）或数字分点（1. 2. 3.）来组织内容，使结构更清晰。对于内容较少的模块，用段落即可。';
         }
         return '输出格式：为每个模块生成一段完整的文字，不要分点列举。';
+    }
+
+    /**
+     * 获取学生/家长称呼指令
+     * - studentAddress 非空时，指示 AI 用该模板称呼学生（占位符 {name}）
+     * - parentAddress 非空时，指示 AI 用该称谓称呼家长
+     * - 两者皆空时返回空字符串（不注入，沿用姓名处理规则）
+     *
+     * @param {object} style - 风格对象
+     * @param {string|null} studentName - 学生全名（小组模式传 null）
+     * @param {string|null} studentShort - 学生短名（小组模式传 null）
+     * @returns {string} 称呼指令文本
+     */
+    static getAddressInstructions(style, studentName, studentShort) {
+        if (!style) return '';
+        const parts = [];
+
+        if (style.studentAddress && typeof style.studentAddress === 'string') {
+            if (studentName) {
+                // 单学生模式：把 {name} 替换为实际短名（受 nameShorten 影响已在调用处算好）
+                const name = (style.nameShorten !== false && studentName.length >= 3)
+                    ? studentShort : studentName;
+                const example = style.studentAddress.replaceAll('{name}', name);
+                parts.push(`称呼学生时使用"${example}"（按模板"${style.studentAddress}"生成），不要使用"该生"、"这位同学"等代称。`);
+            } else {
+                // 小组模式：给出通用规则
+                parts.push(`称呼学生时按模板"${style.studentAddress}"生成（{name} 替换为按姓名规则处理后的学生名），不要使用"该生"、"这位同学"等代称。`);
+            }
+        }
+
+        if (style.parentAddress && typeof style.parentAddress === 'string') {
+            if (studentName) {
+                const example = style.parentAddress
+                    .replaceAll('{student}', studentShort || studentName)
+                    .replaceAll('{name}', studentShort || studentName);
+                parts.push(`称呼家长时使用"${example}"。`);
+            } else {
+                parts.push(`称呼家长时使用"${style.parentAddress}"（{student}/{name} 替换为对应学生短名）。`);
+            }
+        }
+
+        return parts.length > 0 ? parts.join(' ') : '';
     }
 
     /**
@@ -666,6 +712,8 @@ ${segment}
             ? '在课后作业模块中，可以适当建议家长协助监督。'
             : '不要在反馈中提及"请家长协助"、"请家长监督"、"请家长提醒"等类似内容。';
         const customReq = style.customPrompt ? `\n\n## 用户自定义要求\n${style.customPrompt}` : '';
+        // 学生/家长称呼指令（小组模式：传 null 表示只输出通用规则，不针对单个学生）
+        const addressReq = this.getAddressInstructions(style, null, null);
 
         // 科目专属模板
         let subjectTemplateReq = '';
@@ -757,7 +805,8 @@ ${processedTranscript}
 6. ${parentReq}
 7. ${nameInstruction}
 8. ${formatReq}
-9. 请为每位学生**分别**生成独立的课堂反馈
+9. ${addressReq}
+10. 请为每位学生**分别**生成独立的课堂反馈
 ${subjectTemplateReq}
 ${promptTemplateReq}
 ${customReq}
@@ -766,14 +815,25 @@ ${customReq}
 ${moduleInstructions}
 
 ## 公共模块特殊要求（极其重要，必须严格遵守）
-【课堂内容】和【课后作业】这两个模块是**全组统一的公共内容**，描述的是整节课的客观情况，不是针对某个学生的个人反馈。因此：
-- **绝对禁止**在【课堂内容】和【课后作业】中出现任何学生姓名（包括"彦祖"、"亦凡"、"杰伦"、"小明"等）
-- **绝对禁止**在【课堂内容】和【课后作业】中使用"请某某同学"、"某某需要"、"某某在课后"等指向特定学生的表述
-- 【课堂内容】应客观描述本节课的教学内容、知识点、课堂活动，不要提及任何具体学生的表现
-- 【课后作业】应客观布置作业内容和要求，面向全体学生，不要指定由某位学生完成
-- 如果作业要求中需要提及学生，使用"同学们"、"大家"等集体称谓
+${(() => {
+  const commonMods = (style && Array.isArray(style.commonModules) && style.commonModules.length > 0)
+      ? style.commonModules : ['课堂内容', '课后作业'];
+  const term = (style && style.groupAddressTerm) || '同学们';
+  const modList = commonMods.map(m => `【${m}】`).join('和');
+  const examples = commonMods.length > 0
+      ? `【${commonMods[0]}】应客观描述本节课的教学内容、知识点、课堂活动，不要提及任何具体学生的表现`
+      : '';
+  const examples2 = commonMods.length > 1
+      ? `\n- 【${commonMods[1]}】应客观布置作业内容和要求，面向全体学生，不要指定由某位学生完成`
+      : '';
+  return `${modList}这两个模块是**全组统一的公共内容**，描述的是整节课的客观情况，不是针对某个学生的个人反馈。因此：
+- **绝对禁止**在${modList}中出现任何学生姓名（包括"彦祖"、"亦凡"、"杰伦"、"小明"等）
+- **绝对禁止**在${modList}中使用"请某某同学"、"某某需要"、"某某在课后"等指向特定学生的表述
+- ${examples}${examples2}
+- 如果作业要求中需要提及学生，使用"${term}"、"大家"等集体称谓
 - 错误的例子："请彦祖在课后独立完成..."、"亦凡需要复习..."、"杰伦的时间轴作业..."
-- 正确的例子："请同学们在课后独立完成..."、"本次作业要求大家..."
+- 正确的例子："请${term}在课后独立完成..."、"本次作业要求大家..."`;
+})()}
 
 ## 输出格式（必须严格遵守）
 你必须输出合法的 JSON 对象，格式如下：
@@ -807,7 +867,11 @@ ${moduleInstructions}
 - studentName 必须使用学生的全名
 - module 必须是上述列出的模块名之一
 - content 为该模块的反馈内容
-- 【课堂内容】和【课后作业】对所有学生应该是**完全相同**的客观描述`;
+- ${(() => {
+  const cm = (style && Array.isArray(style.commonModules) && style.commonModules.length > 0)
+      ? style.commonModules : ['课堂内容', '课后作业'];
+  return cm.map(m => `【${m}】`).join('和');
+})()}对所有学生应该是**完全相同**的客观描述`;
 
         const baseUrl = Storage.getApiBaseUrl() || 'https://api.deepseek.com';
         try {
@@ -1161,6 +1225,20 @@ ${samplesBlock}
       "maxLength": 数字，该模块在样本中的最多字数（估算上限）
     }
   ],
+
+  "commonModules": "公共模块名数组（小组模式下对所有学生保持一致内容的模块，通常是描述整节课客观情况的模块，如课堂内容/课后作业）。从样本内容判断哪些模块是面向全体而非个人；无明确迹象返回 null",
+  "groupAddressTerm": "小组模式公共模块中的集体称谓（如'同学们'/'大家'/'各位同学'）。样本中未出现集体称谓返回 null",
+
+  "useOpening": true或false，样本是否在标题前有开场白（如'家长您好，我是XX老师'）,
+  "feedbackOpening": "开场白文本模板。从样本标题前的文字反推，用占位符 {家长}{老师}{学生}{科目}{日期}{机构} 还原。useOpening 为 false 时返回空字符串",
+  "useClosing": true或false，样本是否在末尾有结尾话术（如'如有疑问随时联系'）,
+  "feedbackClosing": "结尾话术文本。从样本末尾文字反推。useClosing 为 false 时返回空字符串",
+
+  "studentAddress": "学生称呼模板（如'{name}同学'/'{name}小朋友'）。从样本中对学生的称呼反推；样本未使用特殊称呼返回 null",
+  "parentAddress": "家长称呼（如'家长您好'/'XX妈妈'）。从样本中对家长的称呼反推；未出现返回 null",
+
+  "useAttachmentHint": true或false，样本末尾是否有附件/照片/视频提示,
+  "attachmentHint": "附件提示文本。从样本末尾反推；useAttachmentHint 为 false 时返回空字符串",
 
   "customPrompt": "整体写作要求备注（1-3句话，总结样本的整体写作风格、语气特点、特殊要求，作为每次生成反馈时的追加要求）。无特殊要求返回空字符串"
 }
