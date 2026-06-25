@@ -359,9 +359,10 @@ class DB {
 
             console.log(`[DB] 迁移完成，已清除 ${cfKeys.length} 个 localStorage 键`);
         } catch (e) {
-            console.error('[DB] 迁移失败:', e);
-            // 迁移失败时仍标记，避免反复尝试
-            await this.set('cf_migrated', true);
+            console.error('[DB] 迁移失败，将在下次启动时重试:', e);
+            // 不标记 cf_migrated：下次启动会重新尝试迁移
+            // 不清除 localStorage 键：数据保留，避免丢失
+            // putRecord/putRecords 是幂等覆盖操作，重试时不会产生重复数据
         }
     }
 

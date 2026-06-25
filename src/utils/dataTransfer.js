@@ -75,6 +75,93 @@ export function exportData() {
 }
 
 /**
+ * 校验导入数据的结构与类型，避免损坏数据覆盖 store 致全应用崩溃。
+ * 校验失败抛出带可读信息的 Error。
+ */
+function validateImportData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('文件内容不是有效的 JSON 对象');
+  }
+  // students：必须是数组，元素必须是含 id/name 的对象
+  if (Object.prototype.hasOwnProperty.call(data, 'students')) {
+    if (!Array.isArray(data.students)) throw new Error('students 字段必须是数组');
+    for (const s of data.students) {
+      if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.name !== 'string') {
+        throw new Error('students 数组中存在无效的学生记录（缺少 id 或 name）');
+      }
+    }
+  }
+  // subjects：必须是数组，元素必须是含 id/name 的对象
+  if (Object.prototype.hasOwnProperty.call(data, 'subjects')) {
+    if (!Array.isArray(data.subjects)) throw new Error('subjects 字段必须是数组');
+    for (const s of data.subjects) {
+      if (!s || typeof s !== 'object' || typeof s.id !== 'string' || typeof s.name !== 'string') {
+        throw new Error('subjects 数组中存在无效的科目记录');
+      }
+    }
+  }
+  // studentSubjects：必须是对象（id -> array）
+  if (Object.prototype.hasOwnProperty.call(data, 'studentSubjects')) {
+    if (typeof data.studentSubjects !== 'object' || Array.isArray(data.studentSubjects)) {
+      throw new Error('studentSubjects 字段必须是对象');
+    }
+  }
+  // feedbackHistory / subjectTemplates / studentTemplates：必须是对象
+  for (const key of ['feedbackHistory', 'subjectTemplates', 'studentTemplates']) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      if (typeof data[key] !== 'object' || Array.isArray(data[key])) {
+        throw new Error(`${key} 字段必须是对象`);
+      }
+    }
+  }
+  // quickReplies / promptTemplates：必须是数组
+  for (const key of ['quickReplies', 'promptTemplates']) {
+    if (Object.prototype.hasOwnProperty.call(data, key) && !Array.isArray(data[key])) {
+      throw new Error(`${key} 字段必须是数组`);
+    }
+  }
+  // settings：必须是对象
+  if (Object.prototype.hasOwnProperty.call(data, 'settings')) {
+    if (typeof data.settings !== 'object' || Array.isArray(data.settings)) {
+      throw new Error('settings 字段必须是对象');
+    }
+  }
+}
+
+/**
+ * 深拷贝 store 当前状态作为回滚快照（导入失败时恢复，避免半导入不一致状态）
+ */
+function snapshotStore() {
+  return {
+    _students: JSON.parse(JSON.stringify(store._students || [])),
+    _subjects: JSON.parse(JSON.stringify(store._subjects || [])),
+    _studentSubjects: JSON.parse(JSON.stringify(store._studentSubjects || {})),
+    _feedbackCache: JSON.parse(JSON.stringify(store._feedbackCache || {})),
+    _subjectTemplatesCache: JSON.parse(JSON.stringify(store._subjectTemplatesCache || {})),
+    _templatesCache: JSON.parse(JSON.stringify(store._templatesCache || {})),
+    _quickRepliesCache: JSON.parse(JSON.stringify(store._quickRepliesCache || [])),
+    _promptTemplatesCache: JSON.parse(JSON.stringify(store._promptTemplatesCache || [])),
+  };
+}
+
+/**
+ * 恢复 store 到快照状态（回滚失败的导入）
+ */
+function restoreStore(snap) {
+  store._students = snap._students;
+  store._subjects = snap._subjects;
+  store._studentSubjects = snap._studentSubjects;
+  store._feedbackCache = snap._feedbackCache;
+  store._subjectTemplatesCache = snap._subjectTemplatesCache;
+  store._templatesCache = snap._templatesCache;
+  store._quickRepliesCache = snap._quickRepliesCache;
+  store._promptTemplatesCache = snap._promptTemplatesCache;
+  store._saveStudents();
+  store._saveSubjects();
+  store._saveStudentSubjects();
+}
+
+/**
  * 从 JSON 文件导入数据
  * @param {File} file - 用户选择的 JSON 文件
  * @returns {Promise<void>}
@@ -92,16 +179,22 @@ export function importData(file) {
       try {
         data = JSON.parse(e.target.result);
       } catch {
-        UI.showToast('导入失败：文件格式错误');
+        UI.showToast('导入失败：文件格式错误，无法解析为 JSON');
         reject(new Error('文件格式错误'));
         return;
       }
 
-      if (!data || typeof data !== 'object') {
-        UI.showToast('导入失败：文件格式错误');
-        reject(new Error('文件格式错误'));
+      // 1. 结构校验：不通过则拒绝导入，不触碰 store
+      try {
+        validateImportData(data);
+      } catch (validationErr) {
+        UI.showToast('导入失败：' + validationErr.message);
+        reject(validationErr);
         return;
       }
+
+      // 2. 备份当前 store 状态，导入中途失败时回滚，避免半导入不一致
+      const snapshot = snapshotStore();
 
       try {
         // 学生：直接写入 store 缓存并持久化
@@ -184,7 +277,13 @@ export function importData(file) {
         setTimeout(() => location.reload(), 1500);
         resolve();
       } catch (err) {
-        UI.showToast('导入失败：' + (err.message || '未知错误'));
+        // 3. 导入中途失败：回滚到快照，避免 store 处于半导入损坏状态
+        try {
+          restoreStore(snapshot);
+        } catch (restoreErr) {
+          console.error('回滚失败:', restoreErr);
+        }
+        UI.showToast('导入失败：' + (err.message || '未知错误，已恢复原数据'));
         reject(err);
       }
     };

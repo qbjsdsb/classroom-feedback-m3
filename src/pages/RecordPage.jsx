@@ -68,6 +68,7 @@ export default function RecordPage() {
   const { currentStudent, currentGroup, currentSubject, setCurrentSubject } = session;
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const isDark = theme.palette.mode === 'dark';
 
   // ========== 本地 UI state ==========
   const [quickRepliesExpanded, setQuickRepliesExpanded] = useState(true);
@@ -77,6 +78,8 @@ export default function RecordPage() {
   const [addQuickReplyOpen, setAddQuickReplyOpen] = useState(false);
   const [selectedPromptTemplateId, setSelectedPromptTemplateId] = useState(null);
   const [generating, setGenerating] = useState(false);
+  // AI 请求的 AbortController 引用：切页面/组件卸载时 abort，避免 token 浪费 + 卸载后 setState 警告
+  const generateAbortRef = useRef(null);
   // 反馈结果展示
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [feedbackMode, setFeedbackMode] = useState('single'); // 'single' | 'group'
@@ -294,6 +297,10 @@ export default function RecordPage() {
     setGenerating(true);
     UI.showLoading('正在分析课堂内容...');
 
+    // 创建 AbortController：切页面/组件卸载时 abort，避免 token 浪费 + 卸载后 setState 警告
+    const abortController = new AbortController();
+    generateAbortRef.current = abortController;
+
     // 进度提示定时器（模拟原 recordPage.js 的进度切换逻辑）
     // 通过 UI.updateLoading 更新 Backdrop 文案，避免直接 DOM 操作
     let progressStage = 0;
@@ -328,7 +335,7 @@ export default function RecordPage() {
         UI.updateLoading('正在为 ' + studentNames.length + ' 位学生生成反馈...');
         const feedbacks = await AiService.generateGroupFeedback(
           text, moduleNames, studentNames, subjectName, effectiveStyle,
-          subject?.id, selectedPromptTemplateId
+          subject?.id, selectedPromptTemplateId, abortController.signal
         );
 
         // 为每位学生保存到各自的历史记录
@@ -358,7 +365,7 @@ export default function RecordPage() {
         UI.updateLoading('正在生成反馈内容...');
         const feedback = await AiService.generateFeedback(
           text, moduleNames, studentName, subjectName, effectiveStyle,
-          subject?.id, selectedPromptTemplateId
+          subject?.id, selectedPromptTemplateId, abortController.signal
         );
 
         store.addFeedback(currentStudent.id, {
@@ -379,11 +386,14 @@ export default function RecordPage() {
         return;
       }
     } catch (err) {
+      // 用户主动取消（切页面/卸载）：静默忽略，不弹 toast
+      if (err.name === 'AbortError') return;
       UI.showToast('生成失败：' + err.message);
     } finally {
       clearInterval(progressTimer);
       UI.hideLoading();
       setGenerating(false);
+      generateAbortRef.current = null;
       // 清除本次使用的模板ID，避免下次生成时无意识地继续使用
       setSelectedPromptTemplateId(null);
     }
@@ -391,6 +401,17 @@ export default function RecordPage() {
     generating, recorder.displayText, recorder.clearTranscript, Storage, navigate,
     selectedPromptTemplateId, currentSubject, currentStudent, currentGroup, store, refresh,
   ]);
+
+  // ========== 卸载时中止进行中的 AI 请求 ==========
+  // 切页面/组件卸载时 abort，避免 token 浪费 + 卸载后 setState 警告
+  useEffect(() => {
+    return () => {
+      if (generateAbortRef.current) {
+        generateAbortRef.current.abort();
+        generateAbortRef.current = null;
+      }
+    };
+  }, []);
 
   // ========== 关闭反馈结果 Dialog 时清理状态 ==========
   const handleCloseFeedbackDialog = useCallback(() => {

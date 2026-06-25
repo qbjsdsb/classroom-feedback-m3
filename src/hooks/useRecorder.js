@@ -198,7 +198,9 @@ export function useRecorder() {
     };
   }, [ready]);
 
-  // ========== 卸载时清理课堂计时器 ==========
+  // ========== 卸载时清理课堂计时器 + 销毁录音引擎 ==========
+  // 离开录音页（路由切换）时停止录音并释放 AudioContext/MediaStream/事件监听，
+  // 避免麦克风指示灯常亮、CPU 占用、双 engine 写文本混乱
   useEffect(() => {
     return () => {
       const t = classTimerRef.current;
@@ -208,6 +210,15 @@ export function useRecorder() {
       }
       if (draftSaveTimerRef.current) {
         clearTimeout(draftSaveTimerRef.current);
+      }
+      // 销毁引擎：停止录音、释放资源、解绑事件
+      if (engineRef.current) {
+        try {
+          engineRef.current.dispose();
+        } catch (e) {
+          console.warn('[useRecorder] dispose error', e);
+        }
+        engineRef.current = null;
       }
     };
   }, []);

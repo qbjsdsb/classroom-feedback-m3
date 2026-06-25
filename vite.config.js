@@ -39,11 +39,32 @@ export default defineConfig({
         categories: ['education', 'productivity']
       },
       workbox: {
-        // 扩展 globPatterns 包含 json/txt/onnx/wasm：缓存本地 whisper-tiny 模型文件
-        // 模型文件位于 public/vendor/whisper-tiny/（含 config.json/tokenizer.json/onnx 等）
-        // onnx 文件最大约 30MB，maximumFileSizeToCacheInBytes 设为 50MB 以容纳
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,txt,onnx,wasm}'],
-        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024
+        // precache 仅包含常规静态资源（js/css/html/图标/字体/whisper 配置文件）
+        // 大体积的 onnx 模型（~30MB）与 ort wasm（~23MB）改用 runtime caching（CacheFirst）
+        // 避免 SW precache 达 60MB+ 导致首次安装缓慢、iOS 配额报错
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,txt}'],
+        globIgnores: [
+          '**/vendor/whisper-tiny/onnx/**',
+          '**/*.onnx',
+          '**/*.wasm'
+        ],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // ONNX 模型与 wasm 运行时：内容寻址（hash/版本固定），CacheFirst 永久缓存
+            urlPattern: ({ url }) =>
+              url.pathname.endsWith('.onnx') || url.pathname.endsWith('.wasm'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'whisper-model-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 年
+              },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ]
       }
     })
   ],

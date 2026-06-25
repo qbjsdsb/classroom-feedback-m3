@@ -182,7 +182,7 @@ class DataStore {
         return this._students[idx];
     }
 
-    deleteStudent(id) {
+    async deleteStudent(id) {
         const idx = this._students.findIndex(s => s.id === id);
         if (idx === -1) return false;
         this._students.splice(idx, 1);
@@ -191,8 +191,11 @@ class DataStore {
         // 从缓存和 IndexedDB 中删除反馈和模板
         delete this._feedbackCache[id];
         delete this._templatesCache[id];
-        DB.deleteRecord('feedback', id).catch(e => {});
-        DB.deleteRecord('templates', id).catch(e => {});
+        // await 顺序执行：避免与后续 restore 的 putRecord 竞态导致恢复数据被删除覆盖
+        try {
+            await DB.deleteRecord('feedback', id);
+            await DB.deleteRecord('templates', id);
+        } catch (e) {}
         return true;
     }
 
@@ -200,7 +203,7 @@ class DataStore {
      * 软删除学生（缓存数据用于撤销恢复）
      * @returns {Object|null} 被删除的学生数据快照，用于 restoreStudent
      */
-    softDeleteStudent(id) {
+    async softDeleteStudent(id) {
         const idx = this._students.findIndex(s => s.id === id);
         if (idx === -1) return null;
         const student = { ...this._students[idx] };
@@ -213,8 +216,12 @@ class DataStore {
         this.removeStudentSubjects(id);
         delete this._feedbackCache[id];
         delete this._templatesCache[id];
-        DB.deleteRecord('feedback', id).catch(e => {});
-        DB.deleteRecord('templates', id).catch(e => {});
+        // await 顺序执行删除：确保 IDB 中记录先被清除，
+        // 之后若用户撤销 restore，putRecord 不会与未完成的 delete 竞态而被抹掉
+        try {
+            await DB.deleteRecord('feedback', id);
+            await DB.deleteRecord('templates', id);
+        } catch (e) {}
         // 返回快照
         return { student, subjects, feedback, templates };
     }
@@ -223,7 +230,7 @@ class DataStore {
      * 恢复被软删除的学生
      * @param {Object} snapshot - softDeleteStudent 返回的快照
      */
-    restoreStudent(snapshot) {
+    async restoreStudent(snapshot) {
         if (!snapshot || !snapshot.student) return false;
         // 防止重复恢复
         if (this._students.some(s => s.id === snapshot.student.id)) return false;
@@ -233,13 +240,19 @@ class DataStore {
             this._studentSubjects[snapshot.student.id] = snapshot.subjects;
             this._saveStudentSubjects();
         }
+        // await 顺序执行恢复写入：确保 IDB 中记录被完整写回，
+        // 不与可能残留的 delete 操作竞态
         if (snapshot.feedback) {
             this._feedbackCache[snapshot.student.id] = snapshot.feedback;
-            DB.putRecord('feedback', { studentId: snapshot.student.id, history: snapshot.feedback }).catch(e => {});
+            try {
+                await DB.putRecord('feedback', { studentId: snapshot.student.id, history: snapshot.feedback });
+            } catch (e) {}
         }
         if (snapshot.templates) {
             this._templatesCache[snapshot.student.id] = snapshot.templates;
-            DB.putRecord('templates', { studentId: snapshot.student.id, templates: snapshot.templates }).catch(e => {});
+            try {
+                await DB.putRecord('templates', { studentId: snapshot.student.id, templates: snapshot.templates });
+            } catch (e) {}
         }
         return true;
     }

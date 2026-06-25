@@ -128,7 +128,54 @@ export class RecorderEngine {
         this.initSpeechRecognition();
         this._initVisibilityHandler();
         // 页面卸载前刷新日志缓冲区，避免丢失未持久化的 warn/error 日志
-        window.addEventListener('beforeunload', () => this._flushPersistBuffer());
+        // 用命名函数存入 _boundHandlers，dispose() 时可解绑，避免内存泄漏
+        this._boundHandlers.beforeunload = () => this._flushPersistBuffer();
+        window.addEventListener('beforeunload', this._boundHandlers.beforeunload);
+    }
+
+    /**
+     * 销毁引擎实例：停止录音、解绑全局事件、释放 Whisper/AudioContext 资源。
+     * 组件卸载（如离开录音页）时调用，避免 AudioContext/MediaStream/事件监听泄漏。
+     */
+    dispose() {
+        try {
+            // 停止录音与所有定时器
+            this._manualStop = true;
+            this._userIntendsToRecord = false;
+            this.shouldRestart = false;
+            if (this.isRecording || this._isPaused) {
+                this.stop();
+            }
+            // 清理各类定时器
+            if (this._restartTimeout) { clearTimeout(this._restartTimeout); this._restartTimeout = null; }
+            if (this._forcedRebuildTimeout) { clearTimeout(this._forcedRebuildTimeout); this._forcedRebuildTimeout = null; }
+            if (this._startTimeout) { clearTimeout(this._startTimeout); this._startTimeout = null; }
+            if (this._connectingHintTimeout) { clearTimeout(this._connectingHintTimeout); this._connectingHintTimeout = null; }
+            if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
+            if (this.healthCheckInterval) { clearInterval(this.healthCheckInterval); this.healthCheckInterval = null; }
+            if (this.timerInterval) { clearInterval(this.timerInterval); this.timerInterval = null; }
+            // 解绑长按事件（若已绑定）
+            if (this._boundHandlers._longPressBtn) {
+                this._unbindLongPressEvents(this._boundHandlers._longPressBtn);
+                this._boundHandlers._longPressBtn = null;
+            }
+            // 释放 Whisper 资源（AudioContext/MediaStream/Processor）
+            this.stopWhisperRecognition();
+            // 解绑全局事件
+            if (this._boundHandlers.visibilitychange) {
+                document.removeEventListener('visibilitychange', this._boundHandlers.visibilitychange);
+            }
+            if (this._boundHandlers.beforeunload) {
+                window.removeEventListener('beforeunload', this._boundHandlers.beforeunload);
+            }
+            // 清理 SpeechRecognition 实例
+            this._cleanupRecognition(this.recognition);
+            this.recognition = null;
+            // 刷新残留日志
+            this._flushPersistBuffer();
+        } catch (e) {
+            console.warn('[Recorder] dispose error', e);
+        }
     }
 
     // ========== 日志系统方法 ==========
@@ -699,7 +746,8 @@ export class RecorderEngine {
     // ========== 页面可见性处理（浏览器后台节流适配）==========
 
     _initVisibilityHandler() {
-        document.addEventListener('visibilitychange', () => {
+        // 用命名函数存入 _boundHandlers，dispose() 时可解绑
+        this._boundHandlers.visibilitychange = () => {
             if (!this._userIntendsToRecord) return;
 
             if (document.hidden) {
@@ -744,7 +792,8 @@ export class RecorderEngine {
                     this.lastResultTime = Date.now();
                 }
             }
-        });
+        };
+        document.addEventListener('visibilitychange', this._boundHandlers.visibilitychange);
     }
 
     /**
@@ -1992,6 +2041,9 @@ export class RecorderEngine {
 
         // 先移除旧的事件监听器
         this._unbindLongPressEvents(btn);
+
+        // 记录 btn 引用，dispose() 时可解绑
+        this._boundHandlers._longPressBtn = btn;
 
         // 创建并缓存绑定后的处理器引用
         this._boundHandlers.touchstart = this._onTouchStart.bind(this);

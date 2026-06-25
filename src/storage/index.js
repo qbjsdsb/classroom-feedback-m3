@@ -116,6 +116,14 @@ class Storage {
         this._setCache('cf_api_base_url', url);
     }
 
+    static getApiModel() {
+        return this._getCache('cf_api_model') || '';
+    }
+
+    static setApiModel(model) {
+        this._setCache('cf_api_model', model);
+    }
+
     static getModules() {
         const data = this._getCache('cf_modules');
         if (!data) return JSON.parse(JSON.stringify(DEFAULT_MODULES));

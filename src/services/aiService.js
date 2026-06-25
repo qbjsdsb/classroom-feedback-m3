@@ -20,6 +20,17 @@ class AiService {
     static SYSTEM_PROMPT_TOKENS = 100;  // 系统提示词估算
     static FRAMEWORK_TOKENS = 1200;     // prompt框架（含模块说明）估算
 
+    // 默认模型名（用户可在设置页覆盖；默认端点为 https://api.deepseek.com）
+    // 官方端点支持的模型：deepseek-chat（V3）、deepseek-reasoner（R1）
+    static DEFAULT_MODEL = 'deepseek-v4-flash';
+
+    /**
+     * 获取当前模型名：优先用户配置，回退默认值
+     */
+    static getModel() {
+        return Storage.getApiModel() || AiService.DEFAULT_MODEL;
+    }
+
     /**
      * 带重试的 fetch 请求（仅对网络错误自动重试1次）
      * 不对 API Key 错误、4xx 等业务错误重试
@@ -30,6 +41,8 @@ class AiService {
                 const response = await fetch(url, options);
                 return response;
             } catch (err) {
+                // 用户主动取消（AbortController）：直接抛出，不重试
+                if (err.name === 'AbortError') throw err;
                 // 网络错误（断网、DNS失败、CORS等），且还有重试次数
                 if (attempt < retries && (err instanceof TypeError)) {
                     continue;
@@ -39,7 +52,7 @@ class AiService {
         }
     }
 
-    static async generateFeedback(transcript, modules, studentName, subjectName, style, subjectId, promptTemplateId) {
+    static async generateFeedback(transcript, modules, studentName, subjectName, style, subjectId, promptTemplateId, signal) {
         const apiKey = Storage.getApiKey();
         if (!apiKey) {
             throw new Error('请先设置 API Key');
@@ -172,7 +185,7 @@ ${moduleInstructions}
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: 'deepseek-v4-flash',
+                    model: AiService.getModel(),
                     messages: [
                         { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会创造不存在的昵称。你必须以 JSON 格式输出结果。' },
                         { role: 'user', content: prompt }
@@ -180,7 +193,8 @@ ${moduleInstructions}
                     temperature: 0.7,
                     max_tokens: this.MAX_OUTPUT_TOKENS,
                     response_format: { type: 'json_object' }
-                })
+                }),
+                signal
             });
 
             if (!response.ok) {
@@ -401,7 +415,7 @@ ${segment}
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: 'deepseek-v4-flash',
+                    model: AiService.getModel(),
                     messages: [
                         { role: 'system', content: '你是一位专业的课堂记录整理员，擅长提取课堂关键信息。' },
                         { role: 'user', content: prompt }
@@ -584,7 +598,7 @@ ${segment}
      * @param {{temperature?: number, maxTokens?: number}} options - 可选参数
      * @returns {Promise<string>} AI 返回的文本内容
      */
-    static async chatCompletion(messages, { temperature = 0.7, maxTokens = 1500 } = {}) {
+    static async chatCompletion(messages, { temperature = 0.7, maxTokens = 1500, signal } = {}) {
         const apiKey = Storage.getApiKey();
         if (!apiKey) throw new Error('请先设置 API Key');
 
@@ -596,11 +610,12 @@ ${segment}
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: 'deepseek-v4-flash',
+                model: AiService.getModel(),
                 messages,
                 temperature,
                 max_tokens: maxTokens
-            })
+            }),
+            signal
         });
 
         if (!response.ok) {
@@ -631,7 +646,7 @@ ${segment}
      * @param {string|null} promptTemplateId - Prompt 模板 ID
      * @returns {Promise<Array<{studentName: string, feedback: Array<{module: string, content: string}>}>>}
      */
-    static async generateGroupFeedback(transcript, modules, studentNames, subjectName, style, subjectId, promptTemplateId) {
+    static async generateGroupFeedback(transcript, modules, studentNames, subjectName, style, subjectId, promptTemplateId, signal) {
         const apiKey = Storage.getApiKey();
         if (!apiKey) throw new Error('请先设置 API Key');
 
@@ -798,7 +813,7 @@ ${moduleInstructions}
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: 'deepseek-v4-flash',
+                    model: AiService.getModel(),
                     messages: [
                         { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长为多位学生分别撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会混淆不同学生的表现。你必须以 JSON 格式输出结果。' },
                         { role: 'user', content: prompt }
@@ -806,7 +821,8 @@ ${moduleInstructions}
                     temperature: 0.7,
                     max_tokens: this.MAX_OUTPUT_TOKENS,
                     response_format: { type: 'json_object' }
-                })
+                }),
+                signal
             });
 
             if (!response.ok) {

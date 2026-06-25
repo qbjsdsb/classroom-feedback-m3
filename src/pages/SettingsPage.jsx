@@ -90,6 +90,7 @@ export default function SettingsPage() {
   const [apiKeyValid, setApiKeyValid] = useState(null); // null=未验证, true=有效, false=无效
   const [apiKeyValidating, setApiKeyValidating] = useState(false);
   const [apiBaseUrl, setApiBaseUrl] = useState('');
+  const [apiModel, setApiModel] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [speechProvider, setSpeechProvider] = useState('browser');
@@ -108,6 +109,7 @@ export default function SettingsPage() {
     const savedKey = Storage.getApiKey() || '';
     setApiKey(savedKey);
     setApiBaseUrl(Storage.getApiBaseUrl() || '');
+    setApiModel(Storage.getApiModel() || '');
     const s = Storage.getStyle();
     setStyle(s);
     setModuleLengths(s.moduleLengths || {});
@@ -153,6 +155,7 @@ export default function SettingsPage() {
     // API Key
     Storage.setApiKey(trimmedKey);
     Storage.setApiBaseUrl(apiBaseUrl.trim());
+    Storage.setApiModel(apiModel.trim());
 
     // 风格设置
     const newStyle = {
@@ -179,7 +182,7 @@ export default function SettingsPage() {
     if (keyChanged) {
       validateApiKey(trimmedKey);
     }
-  }, [apiKey, apiBaseUrl, style, customPrompt, useCustomDate, customDate, moduleLengths, modules, speechProvider, Storage, refresh, validateApiKey]);
+  }, [apiKey, apiBaseUrl, apiModel, style, customPrompt, useCustomDate, customDate, moduleLengths, modules, speechProvider, Storage, refresh, validateApiKey]);
 
   // ========== 科目管理 ==========
   const subjects = useMemo(() => {
@@ -630,6 +633,16 @@ export default function SettingsPage() {
                   fullWidth
                   size="small"
                   helperText="使用 DeepSeek 可留空；使用兼容接口请填写完整地址"
+                  sx={{ mb: 1.5 }}
+                />
+                <TextField
+                  label="模型名称（可选）"
+                  value={apiModel}
+                  onChange={(e) => setApiModel(e.target.value)}
+                  placeholder="deepseek-v4-flash"
+                  fullWidth
+                  size="small"
+                  helperText="DeepSeek 官方端点支持：deepseek-chat、deepseek-reasoner。留空使用默认值"
                 />
               </Collapse>
               <Button size="small" onClick={() => setShowAdvanced(!showAdvanced)} sx={{ alignSelf: 'flex-start', textTransform: 'none' }}>

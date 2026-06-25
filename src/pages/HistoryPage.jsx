@@ -77,6 +77,8 @@ export default function HistoryPage() {
 
   // 学生切换时重置筛选（模拟原 _lastStudentId 逻辑）
   const lastStudentIdRef = useRef(null);
+  // AI 总结请求的 AbortController：切页面/卸载时 abort
+  const summaryAbortRef = useRef(null);
   useEffect(() => {
     if (currentStudent && currentStudent.id !== lastStudentIdRef.current) {
       lastStudentIdRef.current = currentStudent.id;
@@ -236,6 +238,9 @@ export default function HistoryPage() {
 
     setGeneratingSummary(true);
     UI.showLoading('正在分析学习情况，请稍候...');
+    // 创建 AbortController：切页面/卸载时 abort
+    const abortController = new AbortController();
+    summaryAbortRef.current = abortController;
     try {
       const MAX_SUMMARY_LENGTH = 8000;
       let feedbackSummary = '';
@@ -298,19 +303,32 @@ ${feedbackSummary}
       const content = await AiService.chatCompletion([
         { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长分析学生学习情况并给出专业建议。' },
         { role: 'user', content: prompt }
-      ], { temperature: 0.7, maxTokens: 1500 });
+      ], { temperature: 0.7, maxTokens: 1500, signal: summaryAbortRef.current?.signal });
 
       const summary = parseSummary(content);
       setSummaryData(summary);
       setSummaryStudentName(currentStudent.name);
       setSummaryOpen(true);
     } catch (err) {
+      // 用户主动取消（切页面/卸载）：静默忽略
+      if (err.name === 'AbortError') return;
       UI.showToast('生成总结失败：' + err.message);
     } finally {
       UI.hideLoading();
       setGeneratingSummary(false);
+      summaryAbortRef.current = null;
     }
   }, [currentStudent, Storage, store, navigate]);
+
+  // ========== 卸载时中止进行中的 AI 总结请求 ==========
+  useEffect(() => {
+    return () => {
+      if (summaryAbortRef.current) {
+        summaryAbortRef.current.abort();
+        summaryAbortRef.current = null;
+      }
+    };
+  }, []);
 
   // ========== 操作：复制总结 ==========
   const handleCopySummary = useCallback(async () => {
