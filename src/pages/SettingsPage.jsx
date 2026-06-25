@@ -1,27 +1,21 @@
 // SettingsPage.jsx - 系统设置页（MUI 重写）
 // 原 /workspace/newclassroom/js/pages/settingsPage.js 迁移而来
 //
-// 功能分组（用 Card 分区）：
-// 1. API Key 设置（含显示/隐藏、验证、高级设置 API 基础地址）
-// 2. 语音识别设置（浏览器内置 / 本地AI Whisper + 预加载按钮）
-// 3. 反馈风格设置（语气、分点、Emoji+位置、姓名截取、严格输入、家长协助、自定义日期、按模块字数）
-// 4. 科目管理（添加/删除/改颜色）
-// 5. Prompt 模板库（新建/编辑/复制/删除/应用到科目）
-// 6. 临时备注 + 科目专属设置
-// 7. 反馈模块设置（启用/禁用/排序/删除/添加自定义+描述）
-// 8. 界面主题（亮/暗切换由 ThemeContext 处理，此处提供入口）
-// 9. 录音日志（查看/导出/清空）
-// 10. 数据管理（导出/导入/清空）
+// 布局：智能分析（顶部独立卡片，核心） → 4 组卡片（每组有 masonry 双列）：
+//   反馈内容组：反馈风格、Prompt 模板库 & 科目专属、反馈模块
+//   标题与日期组：标题与日期
+//   科目管理组：科目管理
+//   系统组：API Key、语音识别、界面主题、录音日志、数据管理
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Stack, Typography, Button, IconButton, TextField, MenuItem, Select,
+  Box, Stack, Typography, Button, IconButton, TextField, Select,
   Card, CardContent, CardHeader, Switch, FormControlLabel, Checkbox,
-  ToggleButtonGroup, ToggleButton, Slider, Dialog, DialogTitle, DialogContent,
+  ToggleButtonGroup, ToggleButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Divider, Chip, CircularProgress, Alert, Collapse, InputAdornment,
-  FormControl, InputLabel, FilledInput, ListItem, ListItemIcon, ListItemText,
-  List, ListItemSecondaryAction, Paper, Menu, MenuItem as MuiMenuItem,
+  FormControl, InputLabel, ListItemText,
+  Paper, Menu, MenuItem as MuiMenuItem,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
@@ -43,20 +37,100 @@ import PaletteIcon from '@mui/icons-material/Palette';
 import KeyIcon from '@mui/icons-material/Key';
 import MicIcon from '@mui/icons-material/Mic';
 import StyleIcon from '@mui/icons-material/Style';
+import TitleIcon from '@mui/icons-material/Title';
 import SchoolIcon from '@mui/icons-material/School';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import SubjectIcon from '@mui/icons-material/Subject';
-import AssessmentIcon from '@mui/icons-material/Assessment';
 import StorageIcon from '@mui/icons-material/Storage';
 import { useData } from '../store/DataContext';
 import { useThemeMode } from '../contexts/ThemeContext';
 import { UI } from '../utils/ui';
 import AiService from '../services/aiService';
 import { getRecorderEngine } from '../services/recorderHolder';
-import { exportData, importData } from '../utils/dataTransfer';
+import { exportData, importData, exportConfig, importConfig } from '../utils/dataTransfer';
 import { generateFeedbackTitle, getModuleIcon } from '../utils/feedback';
-import StyleAnalysisDialog from '../components/StyleAnalysisDialog';
+import { INSTITUTION_TEMPLATES } from '../data/institutionTemplates';
+
+// 智能分析：可推断项的中文标签映射（用于改动反馈卡片展示）
+const ANALYSIS_LABELS = {
+  tone: '语气风格',
+  useEmoji: '使用 Emoji',
+  emojiPosition: 'Emoji 位置',
+  useBulletPoints: '分点输出',
+  nameShorten: '姓名缩写',
+  includeParentHelp: '包含家长协助',
+  strictInput: '严格遵循输入',
+  titleTemplate: '标题模板',
+  titleDateFormat: '日期格式',
+  institutionName: '机构名',
+  teacherName: '老师名',
+  moduleWrap: '模块包裹符号',
+  moduleSeparator: '模块分隔符',
+  commonModules: '公共模块',
+  groupAddressTerm: '集体称谓',
+  useOpening: '启用开场白',
+  feedbackOpening: '开场白',
+  useClosing: '启用结尾话术',
+  feedbackClosing: '结尾话术',
+  studentAddress: '学生称呼',
+  parentAddress: '家长称呼',
+  useAttachmentHint: '附件提示',
+  attachmentHint: '附件提示文本',
+  customPrompt: '整体备注',
+  modules: '模块列表',
+  // P2 高级字段
+  systemPrompt: '自定义系统 Prompt',
+  temperature: '温度',
+  maxOutputTokens: '最大输出 token',
+  historyLimit: '历史上限',
+  language: '输出语言',
+  groupNameSeparator: '小组姓名连接符',
+};
+
+// 把字段值映射成可读文本（用于改动反馈卡片）
+const TONE_LABELS = {
+  friendly: '亲切', formal: '正式', concise: '简洁',
+  detailed: '详细', humorous: '幽默', encouraging: '鼓励',
+};
+const WRAP_LABELS = {
+  '【】': '【】', '[]': '[]', '（）': '（）', '·': '·', none: '无',
+};
+const SEP_LABELS = {
+  '\n\n': '空行', '\n': '单换行', '\n---\n': '横线', '\n\n---\n\n': '空行+横线',
+};
+const DATE_FMT_LABELS = {
+  'M.D': 'M.D', 'MM-DD': 'MM-DD', 'X月X日': 'X月X日', 'YYYY-MM-DD': 'YYYY-MM-DD',
+};
+const LANG_LABELS = { zh: '中文', en: 'English', ja: '日本語' };
+
+function formatValue(key, val) {
+  if (val === null || val === undefined || val === '') return '（空）';
+  switch (key) {
+    case 'tone': return TONE_LABELS[val] || String(val);
+    case 'useEmoji':
+    case 'useBulletPoints':
+    case 'includeParentHelp':
+    case 'strictInput':
+      return val ? '是' : '否';
+    case 'nameShorten': return val ? '缩写' : '不缩写';
+    case 'moduleWrap': return WRAP_LABELS[val] || String(val);
+    case 'moduleSeparator': return SEP_LABELS[val] || JSON.stringify(val);
+    case 'titleDateFormat': return DATE_FMT_LABELS[val] || String(val);
+    case 'language': return LANG_LABELS[val] || String(val);
+    case 'temperature': return Number(val).toFixed(1);
+    case 'maxOutputTokens':
+    case 'historyLimit':
+      return String(val);
+    case 'systemPrompt': {
+      const s = String(val);
+      return s.length > 40 ? s.slice(0, 40) + '…' : s;
+    }
+    case 'groupNameSeparator': return JSON.stringify(val);
+    case 'modules':
+      return Array.isArray(val) ? `${val.length} 个模块` : String(val);
+    default: return String(val);
+  }
+}
 
 // 语气风格选项
 const TONE_OPTIONS = [
@@ -109,6 +183,13 @@ const MODULE_SEPARATOR_OPTIONS = [
   { value: '\n\n---\n\n', label: '空行+横线+空行' },
 ];
 
+// 输出语言选项
+const LANGUAGE_OPTIONS = [
+  { value: 'zh', label: '中文' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
+];
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { store, Storage, ready, refresh, refreshCounter } = useData();
@@ -135,13 +216,18 @@ export default function SettingsPage() {
   // 批次2：当前展开编辑的模块索引（null 表示都收起）
   const [expandedModuleIndex, setExpandedModuleIndex] = useState(null);
 
-  // 智能分析：样本输入 + 分析状态 + 结果预览 Dialog
-  const [analysisSample, setAnalysisSample] = useState('');
-  const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
+  // 智能分析：多样本列表 + 分析状态 + 改动反馈 Alert
+  const [samples, setSamples] = useState([]);          // 已添加的样本数组
+  const [sampleInput, setSampleInput] = useState('');  // 当前输入框内容
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
   const analysisAbortRef = useRef(null);
+  // 改动反馈 Alert
+  const [analysisChanges, setAnalysisChanges] = useState(null);  // [{key,label,oldValue,newValue}] 或 null
+  const [analysisSnapshot, setAnalysisSnapshot] = useState(null); // 应用前快照，用于撤销
+  const [analysisAlertVisible, setAnalysisAlertVisible] = useState(false);
+  const [analysisAlertExpanded, setAnalysisAlertExpanded] = useState(false);
+  const analysisAlertTimerRef = useRef(null);
 
   // 挂载时从 Storage 初始化所有 state
   useEffect(() => {
@@ -204,7 +290,8 @@ export default function SettingsPage() {
       useCustomDate,
       customDate,
       moduleLengths,
-      language: 'zh',
+      // P2 高级字段由 style state 直接带入（systemPrompt/temperature/maxOutputTokens/
+      // historyLimit/language/groupNameSeparator），此处不再硬编码 language
     };
     Storage.saveStyle(newStyle);
     setStyle(newStyle);
@@ -336,11 +423,33 @@ export default function SettingsPage() {
     });
   }, [modules, Storage]);
 
-  // ========== 智能分析：调用 AI 分析样本 ==========
+  // ========== 智能分析：添加/删除/清空样本 ==========
+  const handleAddSample = useCallback(() => {
+    const text = sampleInput.trim();
+    if (!text) {
+      UI.showToast('请先粘贴一段反馈样本');
+      return;
+    }
+    setSamples(prev => [...prev, text]);
+    setSampleInput('');
+  }, [sampleInput]);
+
+  const handleRemoveSample = useCallback((idx) => {
+    setSamples(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const handleClearSamples = useCallback(() => {
+    if (samples.length === 0) return;
+    UI.showConfirm(`确定清空全部 ${samples.length} 条样本？`, () => {
+      setSamples([]);
+      UI.showToast('已清空样本列表');
+    });
+  }, [samples.length]);
+
+  // ========== 智能分析：调用 AI 分析多样本并自动应用 ==========
   const handleStartAnalysis = useCallback(async () => {
-    const sample = analysisSample.trim();
-    if (!sample) {
-      UI.showToast('请先粘贴一段课堂反馈样本');
+    if (samples.length === 0) {
+      UI.showToast('请先添加至少一段反馈样本');
       return;
     }
     const apiKey = Storage.getApiKey();
@@ -348,117 +457,257 @@ export default function SettingsPage() {
       UI.showToast('请先设置 API Key');
       return;
     }
-    setAnalysisResult(null);
+
+    // 应用前快照（用于撤销）
+    const snapshot = {
+      style: { ...style },
+      modules: modules.map(m => ({ ...m })),
+      moduleLengths: { ...moduleLengths },
+      customPrompt,
+    };
+
     setAnalysisError(null);
     setAnalyzing(true);
-    setAnalysisDialogOpen(true);
+    setAnalysisChanges(null);
+    setAnalysisAlertVisible(false);
     const abortController = new AbortController();
     analysisAbortRef.current = abortController;
+
     try {
-      const result = await AiService.analyzeFeedbackStyle(sample, { signal: abortController.signal });
-      setAnalysisResult(result);
+      const result = await AiService.analyzeFeedbackStyle(samples, { signal: abortController.signal });
+      // 自动应用：把所有"可推断"字段（非 null/非空）直接覆盖到 style/modules
+      // 同时收集"被改动的项"用于反馈卡片
+      const changes = [];
+      const oldStyle = { ...style };
+      const oldModules = modules;
+      const oldModuleLengths = { ...moduleLengths };
+      const newStyle = { ...oldStyle };
+      let newCustomPrompt = customPrompt;
+
+      const inferable = (v) => v !== null && v !== undefined && v !== '';
+
+      const styleKeys = [
+        'tone', 'useEmoji', 'emojiPosition', 'useBulletPoints',
+        'nameShorten', 'includeParentHelp', 'strictInput',
+        'titleTemplate', 'titleDateFormat', 'institutionName', 'teacherName',
+        'moduleWrap', 'moduleSeparator',
+        'commonModules', 'groupAddressTerm',
+        'useOpening', 'feedbackOpening', 'useClosing', 'feedbackClosing',
+        'studentAddress', 'parentAddress',
+        'useAttachmentHint', 'attachmentHint',
+        // P2 高级字段：language/groupNameSeparator 可推断；systemPrompt 仅在 AI 明确给出时覆盖
+        'language', 'groupNameSeparator', 'systemPrompt',
+      ];
+      for (const key of styleKeys) {
+        if (inferable(result[key])) {
+          const oldVal = oldStyle[key];
+          const newVal = result[key];
+          // 比较是否真的变化（考虑 undefined 与默认值等价的情况）
+          if (String(oldVal ?? '') !== String(newVal)) {
+            changes.push({
+              key,
+              label: ANALYSIS_LABELS[key] || key,
+              oldValue: formatValue(key, oldVal),
+              newValue: formatValue(key, newVal),
+            });
+            newStyle[key] = newVal;
+          }
+        }
+      }
+
+      // customPrompt 单独处理（同时同步 local state）
+      if (inferable(result.customPrompt)) {
+        if ((oldStyle.customPrompt || '') !== result.customPrompt) {
+          changes.push({
+            key: 'customPrompt',
+            label: ANALYSIS_LABELS.customPrompt,
+            oldValue: formatValue('customPrompt', oldStyle.customPrompt),
+            newValue: formatValue('customPrompt', result.customPrompt),
+          });
+          newStyle.customPrompt = result.customPrompt;
+          newCustomPrompt = result.customPrompt;
+        }
+      }
+
+      // 模块：替换模式（保留 enabled/custom，否则按 AI 推断）
+      let newModules = oldModules;
+      let newLengths = { ...oldModuleLengths };
+      if (Array.isArray(result.modules) && result.modules.length > 0) {
+        newModules = result.modules.map(im => {
+          const existing = oldModules.find(m => m.name === im.name);
+          const built = {
+            name: im.name,
+            enabled: existing ? existing.enabled : true,
+            custom: existing ? existing.custom : true,
+            description: existing ? existing.description : '',
+          };
+          if (im.icon) built.icon = im.icon;
+          else if (existing && existing.icon) built.icon = existing.icon;
+          if (im.prompt) built.prompt = im.prompt;
+          else if (existing && existing.prompt) built.prompt = existing.prompt;
+          return built;
+        });
+        // 同步 moduleLengths
+        for (const im of result.modules) {
+          if (typeof im.minLength === 'number' && typeof im.maxLength === 'number') {
+            newLengths[im.name] = { min: im.minLength, max: im.maxLength };
+          }
+        }
+        // 模块整体作为一项改动
+        const oldNames = oldModules.map(m => m.name).join('、') || '（空）';
+        const newNames = newModules.map(m => m.name).join('、') || '（空）';
+        if (oldNames !== newNames) {
+          changes.push({
+            key: 'modules',
+            label: ANALYSIS_LABELS.modules,
+            oldValue: `${oldModules.length} 个：${oldNames}`,
+            newValue: `${newModules.length} 个：${newNames}`,
+          });
+        }
+        newStyle.moduleLengths = newLengths;
+      }
+
+      // 持久化
+      Storage.saveStyle(newStyle);
+      Storage.saveModules(newModules);
+      setStyle(newStyle);
+      setModules(newModules);
+      setModuleLengths(newLengths);
+      setCustomPrompt(newCustomPrompt);
+
+      // 显示改动反馈 Alert
+      setAnalysisSnapshot(snapshot);
+      setAnalysisChanges(changes);
+      setAnalysisAlertVisible(true);
+      setAnalysisAlertExpanded(false);
+
+      // 30 秒后自动消失
+      if (analysisAlertTimerRef.current) clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = setTimeout(() => {
+        setAnalysisAlertVisible(false);
+        analysisAlertTimerRef.current = null;
+      }, 30000);
+
+      UI.showToast(changes.length > 0
+        ? `AI 已自动调节 ${changes.length} 项设置`
+        : 'AI 分析完成，无配置需要调整');
     } catch (err) {
       if (err.name === 'AbortError') return;
       setAnalysisError(err.message || '分析失败');
+      UI.showToast(`分析失败：${err.message || '未知错误'}`);
     } finally {
       setAnalyzing(false);
       analysisAbortRef.current = null;
     }
-  }, [analysisSample, Storage]);
+  }, [samples, style, modules, moduleLengths, customPrompt, Storage]);
 
-  // ========== 智能分析：应用用户勾选的配置 ==========
-  const handleApplyAnalysis = useCallback(({ selected, moduleMode }) => {
-    const a = analysisResult;
-    if (!a) return;
-    // 1. 应用 style 字段
-    const newStyle = { ...style };
-    if (selected.tone && a.tone) newStyle.tone = a.tone;
-    if (selected.useEmoji && a.useEmoji !== null && a.useEmoji !== undefined) newStyle.useEmoji = a.useEmoji;
-    if (selected.emojiPosition && a.emojiPosition) newStyle.emojiPosition = a.emojiPosition;
-    if (selected.useBulletPoints && a.useBulletPoints !== null && a.useBulletPoints !== undefined) newStyle.useBulletPoints = a.useBulletPoints;
-    if (selected.nameShorten && a.nameShorten !== null && a.nameShorten !== undefined) newStyle.nameShorten = a.nameShorten;
-    if (selected.includeParentHelp && a.includeParentHelp !== null && a.includeParentHelp !== undefined) newStyle.includeParentHelp = a.includeParentHelp;
-    if (selected.strictInput && a.strictInput !== null && a.strictInput !== undefined) newStyle.strictInput = a.strictInput;
-    if (selected.titleTemplate && a.titleTemplate) newStyle.titleTemplate = a.titleTemplate;
-    if (selected.titleDateFormat && a.titleDateFormat) newStyle.titleDateFormat = a.titleDateFormat;
-    if (selected.institutionName && a.institutionName) newStyle.institutionName = a.institutionName;
-    if (selected.teacherName && a.teacherName) newStyle.teacherName = a.teacherName;
-    if (selected.moduleWrap && a.moduleWrap) newStyle.moduleWrap = a.moduleWrap;
-    if (selected.moduleSeparator && a.moduleSeparator) newStyle.moduleSeparator = a.moduleSeparator;
-    if (selected.customPrompt && a.customPrompt !== null && a.customPrompt !== undefined) {
-      newStyle.customPrompt = a.customPrompt;
-      setCustomPrompt(a.customPrompt);
+  // ========== 智能分析：撤销上次自动应用 ==========
+  const handleUndoAnalysis = useCallback(() => {
+    if (!analysisSnapshot) return;
+    const snap = analysisSnapshot;
+    Storage.saveStyle(snap.style);
+    Storage.saveModules(snap.modules);
+    setStyle(snap.style);
+    setModules(snap.modules);
+    setModuleLengths(snap.moduleLengths);
+    setCustomPrompt(snap.customPrompt);
+    setAnalysisAlertVisible(false);
+    setAnalysisChanges(null);
+    setAnalysisSnapshot(null);
+    if (analysisAlertTimerRef.current) {
+      clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = null;
     }
-    setStyle(newStyle);
-    Storage.saveStyle(newStyle);
+    UI.showToast('已撤销 AI 自动调节');
+  }, [analysisSnapshot, Storage]);
 
-    // 2. 应用模块
-    if (selected.modules && Array.isArray(a.modules) && a.modules.length > 0) {
-      let newModules;
-      if (moduleMode === 'replace') {
-        // 替换：保留所有模块的 enabled/custom 字段（同名继承），否则按 AI 推断生成
-        newModules = a.modules.map(im => {
-          const existing = modules.find(m => m.name === im.name);
-          return {
-            name: im.name,
-            enabled: existing ? existing.enabled : true,
-            custom: existing ? existing.custom : true,
-            icon: im.icon || (existing ? existing.icon : undefined),
-            prompt: im.prompt || (existing ? existing.prompt : undefined),
-            description: existing ? existing.description : '',
-          };
-        });
-      } else {
-        // 合并：保留所有当前模块，对 AI 推断的同名模块更新 icon/prompt，新增模块追加
-        newModules = [...modules];
-        for (const im of a.modules) {
-          const idx = newModules.findIndex(m => m.name === im.name);
-          if (idx >= 0) {
-            newModules[idx] = {
-              ...newModules[idx],
-              ...(im.icon ? { icon: im.icon } : {}),
-              ...(im.prompt ? { prompt: im.prompt } : {}),
-            };
-          } else {
-            newModules.push({
-              name: im.name, enabled: true, custom: true,
-              icon: im.icon || undefined, prompt: im.prompt || undefined, description: '',
+  // 关闭 Alert
+  const handleCloseAnalysisAlert = useCallback(() => {
+    setAnalysisAlertVisible(false);
+    if (analysisAlertTimerRef.current) {
+      clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = null;
+    }
+  }, []);
+
+  // ========== 机构配置模板：一键应用整套配置（复用撤销机制） ==========
+  const handleApplyTemplate = useCallback((template) => {
+    UI.showConfirm(`确定应用「${template.name}」模板？将覆盖当前的反馈风格、模块和字数设置，可撤销。`, () => {
+      // 应用前快照（与智能分析共用）
+      const snapshot = {
+        style: { ...style },
+        modules: modules.map(m => ({ ...m })),
+        moduleLengths: { ...moduleLengths },
+        customPrompt,
+      };
+
+      // 合并 style：以当前 style 为底，模板字段覆盖
+      const newStyle = { ...style, ...template.style };
+      // 模块和字数：替换模式
+      const newModules = template.modules.map(m => ({ ...m }));
+      const newLengths = { ...template.moduleLengths };
+
+      // 收集改动用于反馈卡片
+      const changes = [];
+      const inferable = (v) => v !== null && v !== undefined && v !== '';
+      for (const key of Object.keys(template.style)) {
+        if (inferable(template.style[key])) {
+          const oldVal = style[key];
+          const newVal = template.style[key];
+          if (String(oldVal ?? '') !== String(newVal)) {
+            changes.push({
+              key,
+              label: ANALYSIS_LABELS[key] || key,
+              oldValue: formatValue(key, oldVal),
+              newValue: formatValue(key, newVal),
             });
           }
         }
       }
-      // 清理 undefined 字段
-      newModules = newModules.map(m => {
-        const cleaned = { ...m };
-        if (cleaned.icon === undefined) delete cleaned.icon;
-        if (cleaned.prompt === undefined) delete cleaned.prompt;
-        return cleaned;
-      });
-      Storage.saveModules(newModules);
-      setModules(newModules);
-
-      // 同步 moduleLengths：用 AI 推断的 min/max 更新（仅当应用模块时）
-      const newLengths = { ...moduleLengths };
-      for (const im of a.modules) {
-        if (typeof im.minLength === 'number' && typeof im.maxLength === 'number') {
-          newLengths[im.name] = { min: im.minLength, max: im.maxLength };
-        }
+      // 模块整体改动
+      const oldNames = modules.map(m => m.name).join('、') || '（空）';
+      const newNames = newModules.map(m => m.name).join('、') || '（空）';
+      if (oldNames !== newNames) {
+        changes.push({
+          key: 'modules',
+          label: ANALYSIS_LABELS.modules,
+          oldValue: `${modules.length} 个：${oldNames}`,
+          newValue: `${newModules.length} 个：${newNames}`,
+        });
       }
+
+      // 持久化
+      Storage.saveStyle(newStyle);
+      Storage.saveModules(newModules);
+      setStyle(newStyle);
+      setModules(newModules);
       setModuleLengths(newLengths);
-      // moduleLengths 保存在 style 里，需同步
-      Storage.saveStyle({ ...newStyle, moduleLengths: newLengths });
-    }
 
-    setAnalysisDialogOpen(false);
-    UI.showToast('已应用勾选的配置');
-  }, [analysisResult, style, modules, moduleLengths, Storage]);
+      // 显示改动反馈 Alert（复用智能分析的 Alert 机制）
+      setAnalysisSnapshot(snapshot);
+      setAnalysisChanges(changes);
+      setAnalysisAlertVisible(true);
+      setAnalysisAlertExpanded(false);
+      if (analysisAlertTimerRef.current) clearTimeout(analysisAlertTimerRef.current);
+      analysisAlertTimerRef.current = setTimeout(() => {
+        setAnalysisAlertVisible(false);
+        analysisAlertTimerRef.current = null;
+      }, 30000);
 
-  // 卸载时中止进行中的分析请求
+      UI.showToast(`已应用「${template.name}」模板，可撤销`);
+    });
+  }, [style, modules, moduleLengths, customPrompt, Storage]);
+
+  // 卸载时中止进行中的分析请求 + 清理 Alert 定时器
   useEffect(() => {
     return () => {
       if (analysisAbortRef.current) {
         analysisAbortRef.current.abort();
         analysisAbortRef.current = null;
+      }
+      if (analysisAlertTimerRef.current) {
+        clearTimeout(analysisAlertTimerRef.current);
+        analysisAlertTimerRef.current = null;
       }
     };
   }, []);
@@ -607,6 +856,7 @@ export default function SettingsPage() {
 
   // ========== 数据导入导出 ==========
   const fileInputRef = useRef(null);
+  const configFileInputRef = useRef(null);
 
   const handleExport = useCallback(() => {
     exportData();
@@ -622,6 +872,24 @@ export default function SettingsPage() {
     const file = e.target.files[0];
     if (!file) return;
     importData(file).catch(() => {});
+    e.target.value = '';
+  }, []);
+
+  // 仅导入配置（不含学生/历史），用于换机构场景
+  const handleExportConfig = useCallback(() => {
+    exportConfig();
+  }, []);
+
+  const handleImportConfigClick = useCallback(() => {
+    configFileInputRef.current?.click();
+  }, []);
+
+  const handleImportConfigFile = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    UI.showConfirm('导入配置将覆盖当前的反馈风格、模块、科目和模板设置（不影响学生和反馈历史），是否继续？', () => {
+      importConfig(file).catch(() => {});
+    });
     e.target.value = '';
   }, []);
 
@@ -777,12 +1045,874 @@ export default function SettingsPage() {
         <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 500 }}>系统设置</Typography>
       </Stack>
 
-      {/* 电脑端2列 masonry：CSS multi-column，卡片按高度自动流动填充，避免单列过长 */}
+      {/* ========== 顶部：AI 改动反馈 Alert（应用后出现，30秒自动消失） ========== */}
+      {analysisAlertVisible && analysisChanges && (
+        <Alert
+          severity="success"
+          icon={<AutoAwesomeIcon />}
+          sx={{ mb: 2, alignItems: 'flex-start' }}
+          action={
+            <Stack direction="row" spacing={0.5} sx={{ mt: -0.5 }}>
+              <Button
+                size="small"
+                color="inherit"
+                onClick={handleUndoAnalysis}
+                sx={{ textTransform: 'none' }}
+              >
+                撤销
+              </Button>
+              <IconButton size="small" color="inherit" onClick={handleCloseAnalysisAlert} aria-label="关闭">
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            AI 已自动调节 {analysisChanges.length} 项设置
+          </Typography>
+          <Box
+            component="span"
+            sx={{ cursor: 'pointer', color: 'primary.main', textDecoration: 'underline', ml: 0.5 }}
+            onClick={() => setAnalysisAlertExpanded(!analysisAlertExpanded)}
+          >
+            {analysisAlertExpanded ? '收起详情' : '查看详情'}
+          </Box>
+          {analysisAlertExpanded && (
+            <Stack spacing={0.5} sx={{ mt: 1 }}>
+              {analysisChanges.map((c, i) => (
+                <Paper key={i} variant="outlined" sx={{ p: 0.75, bgcolor: 'background.paper' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 500, display: 'block' }}>
+                    {c.label}
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 0.5, useFlexGap: true }}>
+                    <Chip size="small" variant="outlined" label={`原: ${c.oldValue}`} />
+                    <Typography variant="caption" color="text.secondary">→</Typography>
+                    <Chip size="small" color="primary" label={`新: ${c.newValue}`} />
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </Alert>
+      )}
+
+      {/* ========== 智能分析（设置页核心，独立顶部卡片） ========== */}
+      <Card variant="outlined" sx={{ mb: 2, borderColor: 'primary.main', borderWidth: 2, bgcolor: 'action.hover' }}>
+        <CardHeader
+          avatar={<AutoAwesomeIcon color="primary" />}
+          title="智能分析：从样本反推配置"
+          titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+          subheader="粘贴你想要的课堂反馈样本，可添加多条；AI 综合分析后自动调节下方设置，并展示每项改动"
+        />
+        <CardContent sx={{ pt: 0 }}>
+          {/* 样本输入区 */}
+          <TextField
+            multiline
+            minRows={3}
+            maxRows={8}
+            value={sampleInput}
+            onChange={(e) => setSampleInput(e.target.value)}
+            placeholder={'粘贴一段完整的课堂反馈样本，包含标题和各模块内容。例如：\n\n6.25小明数学课堂反馈\n\n【课堂内容】\n本节课讲解了二次函数的图像与性质...'}
+            fullWidth
+            size="small"
+            sx={{ mb: 1 }}
+          />
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleAddSample}
+              disabled={!sampleInput.trim()}
+              sx={{ textTransform: 'none' }}
+            >
+              添加样本
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              可反复粘贴不同样本加入列表，AI 会综合所有样本判断
+            </Typography>
+          </Stack>
+
+          {/* 已添加的样本列表 */}
+          {samples.length > 0 && (
+            <Box sx={{ mb: 1.5 }}>
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  已添加 {samples.length} 条样本
+                </Typography>
+                <Button
+                  size="small"
+                  color="error"
+                  startIcon={<DeleteOutlineIcon />}
+                  onClick={handleClearSamples}
+                  sx={{ textTransform: 'none' }}
+                >
+                  清空全部
+                </Button>
+              </Stack>
+              <Stack spacing={0.75}>
+                {samples.map((s, idx) => (
+                  <Paper key={idx} variant="outlined" sx={{ p: 1, bgcolor: 'background.paper' }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                      <Chip label={idx + 1} size="small" color="primary" sx={{ flexShrink: 0, height: 20 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          flexGrow: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {s}
+                      </Typography>
+                      <IconButton size="small" onClick={() => handleRemoveSample(idx)} aria-label="删除样本">
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {/* 分析错误提示 */}
+          {analysisError && (
+            <Alert severity="error" sx={{ mb: 1.5, py: 0.5 }}>
+              分析失败：{analysisError}
+            </Alert>
+          )}
+
+          {/* AI 综合分析按钮 */}
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Button
+              variant="contained"
+              startIcon={analyzing ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
+              onClick={handleStartAnalysis}
+              disabled={analyzing || samples.length === 0}
+              sx={{ textTransform: 'none' }}
+            >
+              {analyzing ? `AI 综合分析中（${samples.length} 条）...` : `AI 综合分析并自动应用（${samples.length} 条样本）`}
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+            分析后所有可推断的配置会被自动覆盖，并在顶部弹出改动反馈，可一键撤销
+          </Typography>
+
+          <Divider sx={{ my: 1.5 }} />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            或者，直接选择机构类型快速套用：
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true }}>
+            {INSTITUTION_TEMPLATES.map(tpl => (
+              <Chip
+                key={tpl.id}
+                icon={<SchoolIcon />}
+                label={tpl.name}
+                variant="outlined"
+                clickable
+                onClick={() => handleApplyTemplate(tpl)}
+                title={tpl.description}
+              />
+            ))}
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {/* ========== 反馈内容组 ========== */}
+
+      <Typography variant="overline" color="primary" sx={{ display: 'block', mb: 1, fontWeight: 700, letterSpacing: 1.5, fontSize: '0.75rem' }}>反馈内容</Typography>
+
       <Box sx={{
         columnCount: { xs: 1, md: 2 },
         columnGap: 2,
         '& > .MuiCard-root': { mb: 2, breakInside: 'avoid', display: 'block' },
       }}>
+
+        {/* ========== 3. 反馈风格设置 ========== */}
+        <Card variant="outlined">
+          <CardHeader
+            avatar={<StyleIcon color="primary" />}
+            title="反馈风格"
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
+          />
+          <CardContent sx={{ pt: 0 }}>
+            <Stack spacing={2}>
+              {/* 语气风格 */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>语气风格</Typography>
+                <ToggleButtonGroup
+                  value={style.tone || 'formal'}
+                  exclusive
+                  onChange={(_, v) => v && setStyle({ ...style, tone: v })}
+                  size="small"
+                  sx={{ flexWrap: 'wrap', gap: 0.5 }}
+                >
+                  {TONE_OPTIONS.map(opt => (
+                    <ToggleButton key={opt.value} value={opt.value} sx={{ textTransform: 'none', py: 0.5 }}>
+                      {opt.icon} {opt.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+
+              <Divider />
+
+              {/* 开关组 */}
+              <FormControlLabel
+                control={<Switch checked={!!style.useBulletPoints} onChange={(e) => setStyle({ ...style, useBulletPoints: e.target.checked })} />}
+                label="允许分点输出"
+              />
+              <FormControlLabel
+                control={<Switch checked={!!style.useEmoji} onChange={(e) => setStyle({ ...style, useEmoji: e.target.checked })} />}
+                label="使用 Emoji 表情"
+              />
+              {/* Emoji 位置 */}
+              {style.useEmoji && (
+                <Box sx={{ pl: 4 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Emoji 位置</Typography>
+                  <ToggleButtonGroup
+                    value={style.emojiPosition || 'content'}
+                    exclusive
+                    onChange={(_, v) => v && setStyle({ ...style, emojiPosition: v })}
+                    size="small"
+                  >
+                    {EMOJI_POSITION_OPTIONS.map(opt => (
+                      <ToggleButton key={opt.value} value={opt.value} sx={{ textTransform: 'none' }}>{opt.label}</ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                </Box>
+              )}
+              <FormControlLabel
+                control={<Switch checked={style.nameShorten !== false} onChange={(e) => setStyle({ ...style, nameShorten: e.target.checked })} />}
+                label="姓名截取（三字名取后两字）"
+              />
+              <FormControlLabel
+                control={<Switch checked={style.strictInput !== false} onChange={(e) => setStyle({ ...style, strictInput: e.target.checked })} />}
+                label="严格遵循输入内容（不编造）"
+              />
+              <FormControlLabel
+                control={<Switch checked={!!style.includeParentHelp} onChange={(e) => setStyle({ ...style, includeParentHelp: e.target.checked })} />}
+                label='包含"请家长协助"内容'
+              />
+
+              <Divider />
+
+              {/* 按模块字数 */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>按模块字数</Typography>
+                <Stack spacing={1}>
+                  {modules.map((m) => {
+                    const len = moduleLengths[m.name] || { min: 50, max: 150 };
+                    return (
+                      <Paper key={m.name} variant="outlined" sx={{ p: 1.5 }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ minWidth: 80 }}>{m.name}</Typography>
+                          <TextField
+                            type="number"
+                            label="最小"
+                            value={len.min}
+                            onChange={(e) => handleModuleLengthChange(m.name, 'min', parseInt(e.target.value) || 50)}
+                            size="small"
+                            inputProps={{ min: 10, max: 1000 }}
+                            sx={{ width: 90 }}
+                          />
+                          <Typography color="text.secondary">-</Typography>
+                          <TextField
+                            type="number"
+                            label="最大"
+                            value={len.max}
+                            onChange={(e) => handleModuleLengthChange(m.name, 'max', parseInt(e.target.value) || 150)}
+                            size="small"
+                            inputProps={{ min: 50, max: 5000 }}
+                            sx={{ width: 90 }}
+                          />
+                          <Typography variant="caption" color="text.secondary">字</Typography>
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
+              </Box>
+
+              <Divider />
+
+              {/* 学生/家长称呼（第一期 P0-3） */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>学生/家长称呼</Typography>
+                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                  <TextField
+                    label="学生称呼模板"
+                    value={style.studentAddress || ''}
+                    onChange={(e) => setStyle({ ...style, studentAddress: e.target.value })}
+                    size="small"
+                    fullWidth
+                    placeholder="留空=沿用姓名规则；如 {name}同学"
+                  />
+                  <TextField
+                    label="家长称呼"
+                    value={style.parentAddress || ''}
+                    onChange={(e) => setStyle({ ...style, parentAddress: e.target.value })}
+                    size="small"
+                    fullWidth
+                    placeholder="留空=不指定；如 家长您好 / {student}妈妈"
+                  />
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  学生称呼占位符 {`{name}`}（如 "{`{name}`}同学" → "小明同学"）；家长称呼占位符 {`{student}`}/{`{name}`}。留空则不注入额外称呼指令。
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {/* 开场白/结尾话术（第一期 P0-2） */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>开场白 / 结尾话术</Typography>
+                <FormControlLabel
+                  control={<Switch checked={!!style.useOpening} onChange={(e) => setStyle({ ...style, useOpening: e.target.checked })} />}
+                  label="启用开场白"
+                />
+                {style.useOpening && (
+                  <TextField
+                    value={style.feedbackOpening || ''}
+                    onChange={(e) => setStyle({ ...style, feedbackOpening: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="如：{家长}您好，我是{老师}老师，向您反馈{学生}今天{科目}课的情况"
+                    sx={{ mt: 1, mb: 1 }}
+                  />
+                )}
+                <FormControlLabel
+                  control={<Switch checked={!!style.useClosing} onChange={(e) => setStyle({ ...style, useClosing: e.target.checked })} />}
+                  label="启用结尾话术"
+                  sx={{ mt: style.useOpening ? 0 : 1 }}
+                />
+                {style.useClosing && (
+                  <TextField
+                    value={style.feedbackClosing || ''}
+                    onChange={(e) => setStyle({ ...style, feedbackClosing: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="如：如有疑问随时联系，感谢配合！"
+                    sx={{ mt: 1, mb: 1 }}
+                  />
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  占位符：{`{家长} {老师} {学生} {科目} {日期} {机构}`}（复制/导出时替换，缺失则留空）
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {/* 附件提示（第一期 P0-5） */}
+              <Box>
+                <FormControlLabel
+                  control={<Switch checked={!!style.useAttachmentHint} onChange={(e) => setStyle({ ...style, useAttachmentHint: e.target.checked })} />}
+                  label="在反馈末尾追加附件提示（照片/视频）"
+                />
+                {style.useAttachmentHint && (
+                  <TextField
+                    value={style.attachmentHint ?? ''}
+                    onChange={(e) => setStyle({ ...style, attachmentHint: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    sx={{ mt: 1 }}
+                  />
+                )}
+              </Box>
+
+              <Divider />
+
+              {/* AI 高级参数（第三期 P2） */}
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>AI 高级参数</Typography>
+                <Stack spacing={1.5}>
+                  <TextField
+                    label="自定义系统 Prompt（覆盖默认人设）"
+                    value={style.systemPrompt ?? ''}
+                    onChange={(e) => setStyle({ ...style, systemPrompt: e.target.value })}
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="留空使用默认人设；填写后会完全替换 AI 的系统指令"
+                    helperText="警告：覆盖后语气/分点/Emoji 等设置可能不再生效，请谨慎使用"
+                  />
+                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true, alignItems: 'center' }}>
+                    <TextField
+                      label="温度（temperature）"
+                      type="number"
+                      value={style.temperature ?? 0.7}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        setStyle({ ...style, temperature: isNaN(v) ? 0.7 : Math.min(2, Math.max(0, v)) });
+                      }}
+                      size="small"
+                      sx={{ width: 140 }}
+                      inputProps={{ step: 0.1, min: 0, max: 2 }}
+                      helperText="0=确定，2=发散"
+                    />
+                    <TextField
+                      label="最大输出 token"
+                      type="number"
+                      value={style.maxOutputTokens ?? 16384}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        setStyle({ ...style, maxOutputTokens: isNaN(v) ? 16384 : Math.min(65536, Math.max(256, v)) });
+                      }}
+                      size="small"
+                      sx={{ width: 150 }}
+                      inputProps={{ step: 256, min: 256, max: 65536 }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 130 }}>
+                      <InputLabel>输出语言</InputLabel>
+                      <Select
+                        value={style.language || 'zh'}
+                        label="输出语言"
+                        onChange={(e) => setStyle({ ...style, language: e.target.value })}
+                      >
+                        {LANGUAGE_OPTIONS.map(opt => (
+                          <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Stack>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* ========== 6. Prompt 模板库 & 科目专属 ========== */}
+        <Card variant="outlined">
+          <CardHeader
+            avatar={<AutoAwesomeIcon color="primary" />}
+            title="Prompt 模板库 & 科目专属"
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
+            action={
+              <Button size="small" startIcon={<AddIcon />} onClick={openNewTemplateForm} sx={{ textTransform: 'none' }}>新建</Button>
+            }
+          />
+          <CardContent sx={{ pt: 0 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              保存和管理可复用的 Prompt 模板，按科目覆盖默认 Prompt；临时备注每次生成时全局追加
+            </Typography>
+
+            {/* Prompt 模板列表 */}
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Prompt 模板</Typography>
+            {promptTemplates.length === 0 ? (
+              <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>暂无模板，点击右上角新建</Typography>
+            ) : (
+              <Stack spacing={1.5} sx={{ mb: 2 }}>
+                {promptTemplates.map(t => (
+                  <Paper key={t.id} variant="outlined" sx={{ p: 1.5 }}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>{t.name}</Typography>
+                      {t.isDefault && <Chip label="预置" size="small" color="primary" variant="outlined" />}
+                      <Chip label={t.category} size="small" variant="outlined" />
+                    </Stack>
+                    {t.description && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t.description}</Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.prompt.length > 80 ? t.prompt.substring(0, 80) + '...' : t.prompt}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5}>
+                      <Button size="small" startIcon={<EditIcon />} onClick={() => openEditTemplateForm(t)} sx={{ textTransform: 'none' }}>编辑</Button>
+                      <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => handleCopyTemplate(t)} sx={{ textTransform: 'none' }}>复制</Button>
+                      <Button size="small" startIcon={<SendIcon />} onClick={(e) => openApplyToSubjectMenu(e, t.id)} disabled={subjects.length === 0} sx={{ textTransform: 'none' }}>应用</Button>
+                      {!t.isDefault && (
+                        <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={() => handleDeleteTemplate(t.id)} sx={{ textTransform: 'none' }}>删除</Button>
+                      )}
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+
+            <Divider sx={{ mb: 2 }} />
+
+            {/* 临时备注 */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>临时备注（每次生成反馈时追加）</Typography>
+              <TextField
+                multiline
+                minRows={2}
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="例如：本次课特别强调计算准确性…"
+                fullWidth
+                size="small"
+              />
+            </Box>
+
+            <Divider sx={{ mb: 2 }} />
+
+            {/* 科目专属设置 */}
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>科目专属 Prompt</Typography>
+            {subjects.length === 0 ? (
+              <Typography color="text.secondary" variant="body2">暂无科目，请先在"科目管理"添加</Typography>
+            ) : (
+              <Stack spacing={1}>
+                {subjects.map(s => {
+                  const template = store.getSubjectTemplate(s.id);
+                  const hasTemplate = template && template.prompt;
+                  return (
+                    <Paper key={s.id} variant="outlined" sx={{ p: 1.5 }}>
+                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: s.color }} />
+                        <Typography variant="body2" sx={{ flexGrow: 1 }}>{s.name}</Typography>
+                        {hasTemplate ? (
+                          <Chip label="已配置" size="small" color="success" variant="outlined" />
+                        ) : (
+                          <Chip label="未配置" size="small" variant="outlined" />
+                        )}
+                        <Button size="small" onClick={() => openSubjectTemplateEditor(s.id)} sx={{ textTransform: 'none' }}>编辑</Button>
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ========== 7. 反馈模块设置 ========== */}
+        <Card variant="outlined">
+          <CardHeader
+            avatar={<ListAltIcon color="primary" />}
+            title="反馈模块"
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
+            action={
+              <Button size="small" startIcon={<AddIcon />} onClick={handleAddModule} sx={{ textTransform: 'none' }}>添加</Button>
+            }
+          />
+          <CardContent sx={{ pt: 0 }}>
+            {/* 模块格式（包裹符号 / 分隔符） */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>模块格式</Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true }}>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel>模块名包裹符号</InputLabel>
+                  <Select
+                    value={style.moduleWrap || '【】'}
+                    label="模块名包裹符号"
+                    onChange={(e) => setStyle({ ...style, moduleWrap: e.target.value })}
+                  >
+                    {MODULE_WRAP_OPTIONS.map(opt => (
+                      <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel>模块间分隔符</InputLabel>
+                  <Select
+                    value={style.moduleSeparator || '\n\n'}
+                    label="模块间分隔符"
+                    onChange={(e) => setStyle({ ...style, moduleSeparator: e.target.value })}
+                  >
+                    {MODULE_SEPARATOR_OPTIONS.map(opt => (
+                      <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            </Box>
+
+            {/* 小组模式：公共模块 + 集体称谓 */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>小组模式设置</Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true, alignItems: 'center' }}>
+                <FormControl size="small" sx={{ minWidth: 220 }}>
+                  <InputLabel>公共模块（多选）</InputLabel>
+                  <Select
+                    multiple
+                    value={Array.isArray(style.commonModules) ? style.commonModules : ['课堂内容', '课后作业']}
+                    label="公共模块（多选）"
+                    onChange={(e) => setStyle({ ...style, commonModules: e.target.value })}
+                    renderValue={(selected) => (selected && selected.length ? selected.join('、') : '无')}
+                  >
+                    {modules.map(m => (
+                      <MuiMenuItem key={m.name} value={m.name}>
+                        <Checkbox checked={(style.commonModules || []).includes(m.name)} />
+                        <ListItemText primary={m.name} />
+                      </MuiMenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small"
+                  label="集体称谓"
+                  value={style.groupAddressTerm || '同学们'}
+                  onChange={(e) => setStyle({ ...style, groupAddressTerm: e.target.value })}
+                  sx={{ width: 160 }}
+                  helperText="替换学生姓名"
+                />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                公共模块在小组模式下对所有学生保持一致内容，姓名替换为集体称谓
+              </Typography>
+            </Box>
+
+            <Divider sx={{ mb: 1.5 }} />
+
+            <Stack spacing={1}>
+              {modules.map((m, i) => {
+                const expanded = expandedModuleIndex === i;
+                return (
+                <Paper key={i} variant="outlined" sx={{ p: 1.5 }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Switch
+                      size="small"
+                      checked={m.enabled}
+                      onChange={() => handleToggleModule(i)}
+                    />
+                    <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                      <Box component="span" sx={{ mr: 0.5 }}>{m.icon || getModuleIcon(m.name)}</Box>
+                      {m.name}
+                    </Typography>
+                    <IconButton size="small" onClick={() => setExpandedModuleIndex(expanded ? null : i)} aria-label="编辑模块">
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" disabled={i === 0} onClick={() => handleMoveModule(i, -1)} aria-label="上移">
+                      <ArrowUpwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" disabled={i === modules.length - 1} onClick={() => handleMoveModule(i, 1)} aria-label="下移">
+                      <ArrowDownwardIcon fontSize="small" />
+                    </IconButton>
+                    {m.custom && (
+                      <IconButton size="small" color="error" onClick={() => handleDeleteModule(i)} aria-label="删除模块">
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Stack>
+                  {expanded && (
+                    <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                      <Stack direction="row" spacing={1}>
+                        <TextField
+                          label="图标（emoji）"
+                          value={m.icon || ''}
+                          onChange={(e) => handleModuleFieldChange(i, 'icon', e.target.value)}
+                          size="small"
+                          sx={{ width: 120 }}
+                          placeholder="📖"
+                        />
+                        <TextField
+                          label="模块名称"
+                          value={m.name}
+                          onChange={(e) => handleModuleRename(i, e.target.value)}
+                          size="small"
+                          fullWidth
+                        />
+                      </Stack>
+                      <TextField
+                        label="模块写作要求（覆盖默认 prompt）"
+                        value={m.prompt || ''}
+                        onChange={(e) => handleModuleFieldChange(i, 'prompt', e.target.value)}
+                        size="small"
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        placeholder="描述该模块应生成什么内容、用什么风格写。留空使用系统默认描述。"
+                      />
+                      <TextField
+                        label="模块描述（备注，不参与 AI 生成）"
+                        value={m.description || ''}
+                        onChange={(e) => handleModuleFieldChange(i, 'description', e.target.value)}
+                        size="small"
+                        fullWidth
+                        placeholder="可选备注"
+                      />
+                    </Stack>
+                  )}
+                </Paper>
+                );
+              })}
+            </Stack>
+          </CardContent>
+        </Card>
+
+      </Box>
+
+      {/* ========== 标题与日期组 ========== */}
+
+      <Typography variant="overline" color="primary" sx={{ display: 'block', mb: 1, fontWeight: 700, letterSpacing: 1.5, fontSize: '0.75rem' }}>标题与日期</Typography>
+
+      {/* ========== 4. 标题与日期 ========== */}
+      <Card variant="outlined">
+        <CardHeader
+          avatar={<TitleIcon color="primary" />}
+          title="标题与日期"
+          titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
+        />
+        <CardContent sx={{ pt: 0 }}>
+          <Stack spacing={2}>
+            {/* 标题模板 */}
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>标题模板</Typography>
+              <TextField
+                value={style.titleTemplate ?? ''}
+                onChange={(e) => setStyle({ ...style, titleTemplate: e.target.value })}
+                size="small"
+                fullWidth
+                placeholder={DEFAULT_TITLE_TEMPLATE}
+                helperText={`占位符：{日期} {姓名} {科目} {试听} {机构} {老师}。留空使用默认：${DEFAULT_TITLE_TEMPLATE}`}
+              />
+            </Box>
+
+            <Divider />
+
+            {/* 日期格式 + 自定义日期 */}
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>日期格式</Typography>
+              <FormControl size="small" fullWidth sx={{ mb: 1.5 }}>
+                <InputLabel>标题日期格式</InputLabel>
+                <Select
+                  value={style.titleDateFormat || 'M.D'}
+                  label="标题日期格式"
+                  onChange={(e) => setStyle({ ...style, titleDateFormat: e.target.value })}
+                >
+                  {DATE_FORMAT_OPTIONS.map(opt => (
+                    <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControlLabel
+                control={<Switch checked={useCustomDate} onChange={(e) => setUseCustomDate(e.target.checked)} />}
+                label="使用自定义日期（覆盖今天）"
+              />
+              {useCustomDate && (
+                <TextField
+                  type="date"
+                  label="自定义日期"
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  size="small"
+                  sx={{ mt: 1, display: 'block' }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+              )}
+            </Box>
+
+            <Divider />
+
+            {/* 机构 / 老师 */}
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>机构与老师</Typography>
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  label="机构名"
+                  value={style.institutionName ?? ''}
+                  onChange={(e) => setStyle({ ...style, institutionName: e.target.value })}
+                  size="small"
+                  fullWidth
+                  placeholder="如：阳光教育"
+                />
+                <TextField
+                  label="老师名"
+                  value={style.teacherName ?? ''}
+                  onChange={(e) => setStyle({ ...style, teacherName: e.target.value })}
+                  size="small"
+                  fullWidth
+                  placeholder="如：王老师"
+                />
+              </Stack>
+            </Box>
+
+            <Divider />
+
+            {/* 小组姓名连接符 */}
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>小组姓名连接符</Typography>
+              <TextField
+                value={style.groupNameSeparator ?? '、'}
+                onChange={(e) => setStyle({ ...style, groupNameSeparator: e.target.value })}
+                size="small"
+                sx={{ width: 120 }}
+                helperText="小组模式多学生姓名拼接"
+              />
+            </Box>
+
+            <Divider />
+
+            {/* 标题预览 */}
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>标题预览</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
+                <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                  {generateFeedbackTitle({
+                    student: null,
+                    group: [],
+                    subject: null,
+                    getStudentById: () => null,
+                    style,
+                  }) || DEFAULT_TITLE_TEMPLATE}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  注：预览不含姓名/科目/试听标记（需在生成时填充）。
+                </Typography>
+              </Paper>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {/* ========== 科目管理组 ========== */}
+
+      <Typography variant="overline" color="primary" sx={{ display: 'block', mb: 1, fontWeight: 700, letterSpacing: 1.5, fontSize: '0.75rem' }}>科目管理</Typography>
+
+      {/* ========== 5. 科目管理 ========== */}
+      <Card variant="outlined">
+        <CardHeader
+          avatar={<SchoolIcon color="primary" />}
+          title="科目管理"
+          titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
+          action={
+            <Button size="small" startIcon={<AddIcon />} onClick={handleAddSubject} sx={{ textTransform: 'none' }}>添加</Button>
+          }
+        />
+        <CardContent sx={{ pt: 0 }}>
+          {subjects.length === 0 ? (
+            <Typography color="text.secondary" variant="body2">暂无科目，请点击右上角添加</Typography>
+          ) : (
+            <Stack spacing={1}>
+              {subjects.map(s => (
+                <Paper key={s.id} variant="outlined" sx={{ p: 1.5 }}>
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                    <Box
+                      component="input"
+                      type="color"
+                      value={s.color}
+                      onChange={(e) => handleSubjectColorChange(s.id, e.target.value)}
+                      sx={{ width: 32, height: 32, border: 'none', borderRadius: 1, cursor: 'pointer', p: 0, bgcolor: 'transparent' }}
+                    />
+                    <Typography variant="body2" sx={{ flexGrow: 1 }}>{s.name}</Typography>
+                    <IconButton size="small" onClick={() => handleDeleteSubject(s.id)} aria-label="删除科目">
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ========== 系统组 ========== */}
+
+      <Typography variant="overline" color="primary" sx={{ display: 'block', mb: 1, fontWeight: 700, letterSpacing: 1.5, fontSize: '0.75rem' }}>系统</Typography>
+
+      <Box sx={{
+        columnCount: { xs: 1, md: 2 },
+        columnGap: 2,
+        '& > .MuiCard-root': { mb: 2, breakInside: 'avoid', display: 'block' },
+      }}>
+
         {/* ========== 1. API Key 设置 ========== */}
         <Card variant="outlined">
           <CardHeader
@@ -911,490 +2041,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ========== 智能分析（粘贴样本一键配置） ========== */}
-        <Card variant="outlined" sx={{ borderColor: 'primary.main', borderWidth: 1.5 }}>
-          <CardHeader
-            avatar={<AutoAwesomeIcon color="primary" />}
-            title="智能分析：从样本反推配置"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-            subheader="粘贴一段你想要的课堂反馈样本，AI 自动分析格式/风格/模块并填充下方设置"
-          />
-          <CardContent sx={{ pt: 0 }}>
-            <TextField
-              multiline
-              minRows={4}
-              maxRows={10}
-              value={analysisSample}
-              onChange={(e) => setAnalysisSample(e.target.value)}
-              placeholder={'粘贴一段完整的课堂反馈样本，包含标题和各模块内容。例如：\n\n6.25小明数学课堂反馈\n\n【课堂内容】\n本节课讲解了二次函数的图像与性质...\n\n【课堂表现】\n小明今天听课专注，积极回答问题...\n\n【课后作业】\n完成课本第45页练习题1-5题'}
-              fullWidth
-              size="small"
-              sx={{ mb: 1.5 }}
-            />
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <Button
-                variant="contained"
-                startIcon={<AutoAwesomeIcon />}
-                onClick={handleStartAnalysis}
-                disabled={analyzing}
-                sx={{ textTransform: 'none' }}
-              >
-                {analyzing ? '分析中...' : 'AI 分析并应用'}
-              </Button>
-              <Typography variant="caption" color="text.secondary">
-                样本越完整，分析越准确。分析后可逐项勾选应用。
-              </Typography>
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* ========== 3. 反馈风格设置 ========== */}
-        <Card variant="outlined">
-          <CardHeader
-            avatar={<StyleIcon color="primary" />}
-            title="反馈风格"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-          />
-          <CardContent sx={{ pt: 0 }}>
-            <Stack spacing={2}>
-              {/* 语气风格 */}
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>语气风格</Typography>
-                <ToggleButtonGroup
-                  value={style.tone || 'formal'}
-                  exclusive
-                  onChange={(_, v) => v && setStyle({ ...style, tone: v })}
-                  size="small"
-                  sx={{ flexWrap: 'wrap', gap: 0.5 }}
-                >
-                  {TONE_OPTIONS.map(opt => (
-                    <ToggleButton key={opt.value} value={opt.value} sx={{ textTransform: 'none', py: 0.5 }}>
-                      {opt.icon} {opt.label}
-                    </ToggleButton>
-                  ))}
-                </ToggleButtonGroup>
-              </Box>
-
-              <Divider />
-
-              {/* 开关组 */}
-              <FormControlLabel
-                control={<Switch checked={!!style.useBulletPoints} onChange={(e) => setStyle({ ...style, useBulletPoints: e.target.checked })} />}
-                label="允许分点输出"
-              />
-              <FormControlLabel
-                control={<Switch checked={!!style.useEmoji} onChange={(e) => setStyle({ ...style, useEmoji: e.target.checked })} />}
-                label="使用 Emoji 表情"
-              />
-              {/* Emoji 位置 */}
-              {style.useEmoji && (
-                <Box sx={{ pl: 4 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Emoji 位置</Typography>
-                  <ToggleButtonGroup
-                    value={style.emojiPosition || 'content'}
-                    exclusive
-                    onChange={(_, v) => v && setStyle({ ...style, emojiPosition: v })}
-                    size="small"
-                  >
-                    {EMOJI_POSITION_OPTIONS.map(opt => (
-                      <ToggleButton key={opt.value} value={opt.value} sx={{ textTransform: 'none' }}>{opt.label}</ToggleButton>
-                    ))}
-                  </ToggleButtonGroup>
-                </Box>
-              )}
-              <FormControlLabel
-                control={<Switch checked={style.nameShorten !== false} onChange={(e) => setStyle({ ...style, nameShorten: e.target.checked })} />}
-                label="姓名截取（三字名取后两字）"
-              />
-              <FormControlLabel
-                control={<Switch checked={style.strictInput !== false} onChange={(e) => setStyle({ ...style, strictInput: e.target.checked })} />}
-                label="严格遵循输入内容（不编造）"
-              />
-              <FormControlLabel
-                control={<Switch checked={!!style.includeParentHelp} onChange={(e) => setStyle({ ...style, includeParentHelp: e.target.checked })} />}
-                label='包含"请家长协助"内容'
-              />
-
-              <Divider />
-
-              {/* 自定义日期 */}
-              <Box>
-                <FormControlLabel
-                  control={<Switch checked={useCustomDate} onChange={(e) => setUseCustomDate(e.target.checked)} />}
-                  label="使用自定义日期"
-                />
-                {useCustomDate && (
-                  <TextField
-                    type="date"
-                    label="自定义日期"
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                    size="small"
-                    sx={{ mt: 1, display: 'block' }}
-                    slotProps={{ inputLabel: { shrink: true } }}
-                  />
-                )}
-              </Box>
-
-              <Divider />
-
-              {/* 标题模板（批次1） */}
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  反馈标题模板
-                </Typography>
-                <TextField
-                  value={style.titleTemplate ?? DEFAULT_TITLE_TEMPLATE}
-                  onChange={(e) => setStyle({ ...style, titleTemplate: e.target.value })}
-                  fullWidth
-                  size="small"
-                  placeholder={DEFAULT_TITLE_TEMPLATE}
-                  sx={{ mb: 1 }}
-                />
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                  可用占位符：{'{日期} {姓名} {科目} {试听} {机构} {老师}'}
-                  （空值占位符会被替换为空字符串）
-                </Typography>
-                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
-                  <InputLabel>日期格式</InputLabel>
-                  <Select
-                    value={style.titleDateFormat || 'M.D'}
-                    label="日期格式"
-                    onChange={(e) => setStyle({ ...style, titleDateFormat: e.target.value })}
-                  >
-                    {DATE_FORMAT_OPTIONS.map(opt => (
-                      <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                  <TextField
-                    label="机构名（可选）"
-                    value={style.institutionName || ''}
-                    onChange={(e) => setStyle({ ...style, institutionName: e.target.value })}
-                    size="small"
-                    fullWidth
-                    placeholder="如：新东方"
-                  />
-                  <TextField
-                    label="老师名（可选）"
-                    value={style.teacherName || ''}
-                    onChange={(e) => setStyle({ ...style, teacherName: e.target.value })}
-                    size="small"
-                    fullWidth
-                    placeholder="如：张老师"
-                  />
-                </Stack>
-                <Paper variant="outlined" sx={{ p: 1.25, bgcolor: 'background.default' }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
-                    标题预览
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-all' }}>
-                    {generateFeedbackTitle({
-                      student: { name: '王小明', isTrial: false },
-                      group: null,
-                      subject: { name: '数学' },
-                      getStudentById: () => null,
-                      style,
-                    })}
-                  </Typography>
-                </Paper>
-              </Box>
-
-              <Divider />
-
-              {/* 按模块字数 */}
-              <Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>按模块字数</Typography>
-                <Stack spacing={1}>
-                  {modules.map((m) => {
-                    const len = moduleLengths[m.name] || { min: 50, max: 150 };
-                    return (
-                      <Paper key={m.name} variant="outlined" sx={{ p: 1.5 }}>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                          <Typography variant="body2" sx={{ minWidth: 80 }}>{m.name}</Typography>
-                          <TextField
-                            type="number"
-                            label="最小"
-                            value={len.min}
-                            onChange={(e) => handleModuleLengthChange(m.name, 'min', parseInt(e.target.value) || 50)}
-                            size="small"
-                            inputProps={{ min: 10, max: 1000 }}
-                            sx={{ width: 90 }}
-                          />
-                          <Typography color="text.secondary">-</Typography>
-                          <TextField
-                            type="number"
-                            label="最大"
-                            value={len.max}
-                            onChange={(e) => handleModuleLengthChange(m.name, 'max', parseInt(e.target.value) || 150)}
-                            size="small"
-                            inputProps={{ min: 50, max: 5000 }}
-                            sx={{ width: 90 }}
-                          />
-                          <Typography variant="caption" color="text.secondary">字</Typography>
-                        </Stack>
-                      </Paper>
-                    );
-                  })}
-                </Stack>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* ========== 4. 科目管理 ========== */}
-        <Card variant="outlined">
-          <CardHeader
-            avatar={<SchoolIcon color="primary" />}
-            title="科目管理"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-            action={
-              <Button size="small" startIcon={<AddIcon />} onClick={handleAddSubject} sx={{ textTransform: 'none' }}>添加</Button>
-            }
-          />
-          <CardContent sx={{ pt: 0 }}>
-            {subjects.length === 0 ? (
-              <Typography color="text.secondary" variant="body2">暂无科目，请点击右上角添加</Typography>
-            ) : (
-              <Stack spacing={1}>
-                {subjects.map(s => (
-                  <Paper key={s.id} variant="outlined" sx={{ p: 1.5 }}>
-                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                      <Box
-                        component="input"
-                        type="color"
-                        value={s.color}
-                        onChange={(e) => handleSubjectColorChange(s.id, e.target.value)}
-                        sx={{ width: 32, height: 32, border: 'none', borderRadius: 1, cursor: 'pointer', p: 0, bgcolor: 'transparent' }}
-                      />
-                      <Typography variant="body2" sx={{ flexGrow: 1 }}>{s.name}</Typography>
-                      <IconButton size="small" onClick={() => handleDeleteSubject(s.id)} aria-label="删除科目">
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ========== 5. Prompt 模板库 ========== */}
-        <Card variant="outlined">
-          <CardHeader
-            avatar={<AutoAwesomeIcon color="primary" />}
-            title="Prompt 模板库"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-            action={
-              <Button size="small" startIcon={<AddIcon />} onClick={openNewTemplateForm} sx={{ textTransform: 'none' }}>新建</Button>
-            }
-          />
-          <CardContent sx={{ pt: 0 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              保存和管理可复用的 Prompt 模板，在生成反馈时快速应用
-            </Typography>
-            {promptTemplates.length === 0 ? (
-              <Typography color="text.secondary" variant="body2">暂无模板，点击右上角新建</Typography>
-            ) : (
-              <Stack spacing={1.5}>
-                {promptTemplates.map(t => (
-                  <Paper key={t.id} variant="outlined" sx={{ p: 1.5 }}>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>{t.name}</Typography>
-                      {t.isDefault && <Chip label="预置" size="small" color="primary" variant="outlined" />}
-                      <Chip label={t.category} size="small" variant="outlined" />
-                    </Stack>
-                    {t.description && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{t.description}</Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {t.prompt.length > 80 ? t.prompt.substring(0, 80) + '...' : t.prompt}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5}>
-                      <Button size="small" startIcon={<EditIcon />} onClick={() => openEditTemplateForm(t)} sx={{ textTransform: 'none' }}>编辑</Button>
-                      <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => handleCopyTemplate(t)} sx={{ textTransform: 'none' }}>复制</Button>
-                      <Button size="small" startIcon={<SendIcon />} onClick={(e) => openApplyToSubjectMenu(e, t.id)} disabled={subjects.length === 0} sx={{ textTransform: 'none' }}>应用</Button>
-                      {!t.isDefault && (
-                        <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={() => handleDeleteTemplate(t.id)} sx={{ textTransform: 'none' }}>删除</Button>
-                      )}
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            )}
-
-            {/* 临时备注 */}
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1 }}>临时备注（每次生成反馈时追加）</Typography>
-              <TextField
-                multiline
-                minRows={2}
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="例如：本次课特别强调计算准确性…"
-                fullWidth
-                size="small"
-              />
-            </Box>
-          </CardContent>
-        </Card>
-
-        {/* ========== 6. 科目专属设置 ========== */}
-        <Card variant="outlined">
-          <CardHeader
-            avatar={<SubjectIcon color="primary" />}
-            title="科目专属设置"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-          />
-          <CardContent sx={{ pt: 0 }}>
-            {subjects.length === 0 ? (
-              <Typography color="text.secondary" variant="body2">暂无科目，请先添加科目</Typography>
-            ) : (
-              <Stack spacing={1}>
-                {subjects.map(s => {
-                  const template = store.getSubjectTemplate(s.id);
-                  const hasTemplate = template && template.prompt;
-                  return (
-                    <Paper key={s.id} variant="outlined" sx={{ p: 1.5 }}>
-                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: s.color }} />
-                        <Typography variant="body2" sx={{ flexGrow: 1 }}>{s.name}</Typography>
-                        {hasTemplate ? (
-                          <Chip label="已配置" size="small" color="success" variant="outlined" />
-                        ) : (
-                          <Chip label="未配置" size="small" variant="outlined" />
-                        )}
-                        <Button size="small" onClick={() => openSubjectTemplateEditor(s.id)} sx={{ textTransform: 'none' }}>编辑</Button>
-                      </Stack>
-                    </Paper>
-                  );
-                })}
-              </Stack>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ========== 7. 反馈模块设置 ========== */}
-        <Card variant="outlined">
-          <CardHeader
-            avatar={<ListAltIcon color="primary" />}
-            title="反馈模块"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
-            action={
-              <Button size="small" startIcon={<AddIcon />} onClick={handleAddModule} sx={{ textTransform: 'none' }}>添加</Button>
-            }
-          />
-          <CardContent sx={{ pt: 0 }}>
-            {/* 模块格式（包裹符号 / 分隔符） */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>模块格式</Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true }}>
-                <FormControl size="small" sx={{ minWidth: 180 }}>
-                  <InputLabel>模块名包裹符号</InputLabel>
-                  <Select
-                    value={style.moduleWrap || '【】'}
-                    label="模块名包裹符号"
-                    onChange={(e) => setStyle({ ...style, moduleWrap: e.target.value })}
-                  >
-                    {MODULE_WRAP_OPTIONS.map(opt => (
-                      <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 180 }}>
-                  <InputLabel>模块间分隔符</InputLabel>
-                  <Select
-                    value={style.moduleSeparator || '\n\n'}
-                    label="模块间分隔符"
-                    onChange={(e) => setStyle({ ...style, moduleSeparator: e.target.value })}
-                  >
-                    {MODULE_SEPARATOR_OPTIONS.map(opt => (
-                      <MuiMenuItem key={opt.value} value={opt.value}>{opt.label}</MuiMenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Stack>
-            </Box>
-
-            <Divider sx={{ mb: 1.5 }} />
-
-            <Stack spacing={1}>
-              {modules.map((m, i) => {
-                const expanded = expandedModuleIndex === i;
-                return (
-                <Paper key={i} variant="outlined" sx={{ p: 1.5 }}>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Switch
-                      size="small"
-                      checked={m.enabled}
-                      onChange={() => handleToggleModule(i)}
-                    />
-                    <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                      <Box component="span" sx={{ mr: 0.5 }}>{m.icon || getModuleIcon(m.name)}</Box>
-                      {m.name}
-                    </Typography>
-                    <IconButton size="small" onClick={() => setExpandedModuleIndex(expanded ? null : i)} aria-label="编辑模块">
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" disabled={i === 0} onClick={() => handleMoveModule(i, -1)} aria-label="上移">
-                      <ArrowUpwardIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" disabled={i === modules.length - 1} onClick={() => handleMoveModule(i, 1)} aria-label="下移">
-                      <ArrowDownwardIcon fontSize="small" />
-                    </IconButton>
-                    {m.custom && (
-                      <IconButton size="small" color="error" onClick={() => handleDeleteModule(i)} aria-label="删除模块">
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Stack>
-                  {expanded && (
-                    <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-                      <Stack direction="row" spacing={1}>
-                        <TextField
-                          label="图标（emoji）"
-                          value={m.icon || ''}
-                          onChange={(e) => handleModuleFieldChange(i, 'icon', e.target.value)}
-                          size="small"
-                          sx={{ width: 120 }}
-                          placeholder="📖"
-                        />
-                        <TextField
-                          label="模块名称"
-                          value={m.name}
-                          onChange={(e) => handleModuleRename(i, e.target.value)}
-                          size="small"
-                          fullWidth
-                        />
-                      </Stack>
-                      <TextField
-                        label="模块写作要求（覆盖默认 prompt）"
-                        value={m.prompt || ''}
-                        onChange={(e) => handleModuleFieldChange(i, 'prompt', e.target.value)}
-                        size="small"
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        placeholder="描述该模块应生成什么内容、用什么风格写。留空使用系统默认描述。"
-                      />
-                      <TextField
-                        label="模块描述（备注，不参与 AI 生成）"
-                        value={m.description || ''}
-                        onChange={(e) => handleModuleFieldChange(i, 'description', e.target.value)}
-                        size="small"
-                        fullWidth
-                        placeholder="可选备注"
-                      />
-                    </Stack>
-                  )}
-                </Paper>
-                );
-              })}
-            </Stack>
-          </CardContent>
-        </Card>
-
         {/* ========== 8. 界面主题 ========== */}
         <Card variant="outlined">
           <CardHeader
@@ -1453,6 +2099,31 @@ export default function SettingsPage() {
               <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExport} sx={{ flex: 1, textTransform: 'none' }}>导出</Button>
               <Button variant="outlined" size="small" startIcon={<UploadIcon />} onClick={handleImportClick} sx={{ flex: 1, textTransform: 'none' }}>导入</Button>
               <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportFile} style={{ display: 'none' }} />
+            </Stack>
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              历史记录上限（每位学生保留的反馈条数）
+            </Typography>
+            <TextField
+              type="number"
+              value={style.historyLimit ?? 50}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                setStyle({ ...style, historyLimit: isNaN(v) ? 50 : Math.min(10000, Math.max(1, v)) });
+              }}
+              size="small"
+              sx={{ width: 120 }}
+              inputProps={{ step: 10, min: 1, max: 10000 }}
+              helperText="默认 50 条"
+            />
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              配置迁移（换机构用，不含学生和历史）
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportConfig} sx={{ flex: 1, textTransform: 'none' }}>导出配置</Button>
+              <Button variant="outlined" size="small" startIcon={<UploadIcon />} onClick={handleImportConfigClick} sx={{ flex: 1, textTransform: 'none' }}>导入配置</Button>
+              <input type="file" accept=".json" ref={configFileInputRef} onChange={handleImportConfigFile} style={{ display: 'none' }} />
             </Stack>
             <Button
               variant="outlined"
@@ -1659,25 +2330,6 @@ export default function SettingsPage() {
           );
         })}
       </Menu>
-
-      {/* ========== 智能分析结果预览 Dialog ========== */}
-      <StyleAnalysisDialog
-        open={analysisDialogOpen}
-        analysis={analysisResult}
-        currentStyle={style}
-        currentModules={modules}
-        analyzing={analyzing}
-        error={analysisError}
-        onClose={() => {
-          // 分析进行中关闭时中止请求
-          if (analysisAbortRef.current) {
-            analysisAbortRef.current.abort();
-            analysisAbortRef.current = null;
-          }
-          setAnalysisDialogOpen(false);
-        }}
-        onApply={handleApplyAnalysis}
-      />
     </Box>
   );
 }

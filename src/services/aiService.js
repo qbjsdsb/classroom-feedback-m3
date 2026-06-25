@@ -69,6 +69,9 @@ class AiService {
             ? '在课后作业模块中，可以适当建议家长协助监督。'
             : '不要在反馈中提及"请家长协助"、"请家长监督"、"请家长提醒"等类似内容。';
         const customReq = style.customPrompt ? `\n\n## 用户自定义要求\n${style.customPrompt}` : '';
+        // 学生/家长称呼指令（可选；为空时不注入，沿用姓名处理规则）
+        const studentShort = studentName.length >= 3 ? studentName.slice(-2) : studentName;
+        const addressReq = this.getAddressInstructions(style, studentName, studentShort);
 
         // 获取 Prompt 模板
         let promptTemplateReq = '';
@@ -150,7 +153,8 @@ ${processedTranscript}
 6. ${parentReq}
 7. ${nameInstruction}
 8. ${formatReq}
-9. ${this.getLengthGuidance(transcript)}
+9. ${addressReq}
+10. ${this.getLengthGuidance(transcript)}
 ${subjectTemplateReq}
 ${promptTemplateReq}
 ${customReq}
@@ -187,11 +191,11 @@ ${moduleInstructions}
                 body: JSON.stringify({
                     model: AiService.getModel(),
                     messages: [
-                        { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会创造不存在的昵称。你必须以 JSON 格式输出结果。' },
+                        { role: 'system', content: AiService.getSystemPrompt(style) },
                         { role: 'user', content: prompt }
                     ],
-                    temperature: 0.7,
-                    max_tokens: this.MAX_OUTPUT_TOKENS,
+                    temperature: (style && typeof style.temperature === 'number') ? style.temperature : 0.7,
+                    max_tokens: (style && style.maxOutputTokens) ? style.maxOutputTokens : this.MAX_OUTPUT_TOKENS,
                     response_format: { type: 'json_object' }
                 }),
                 signal
@@ -242,6 +246,79 @@ ${moduleInstructions}
             return '输出格式：对于内容较多的模块（如课堂内容、薄弱环节），可以使用 bullet point（·）或数字分点（1. 2. 3.）来组织内容，使结构更清晰。对于内容较少的模块，用段落即可。';
         }
         return '输出格式：为每个模块生成一段完整的文字，不要分点列举。';
+    }
+
+    /**
+     * 获取学生/家长称呼指令
+     * - studentAddress 非空时，指示 AI 用该模板称呼学生（占位符 {name}）
+     * - parentAddress 非空时，指示 AI 用该称谓称呼家长
+     * - 两者皆空时返回空字符串（不注入，沿用姓名处理规则）
+     *
+     * @param {object} style - 风格对象
+     * @param {string|null} studentName - 学生全名（小组模式传 null）
+     * @param {string|null} studentShort - 学生短名（小组模式传 null）
+     * @returns {string} 称呼指令文本
+     */
+    static getAddressInstructions(style, studentName, studentShort) {
+        if (!style) return '';
+        const parts = [];
+
+        if (style.studentAddress && typeof style.studentAddress === 'string') {
+            if (studentName) {
+                // 单学生模式：把 {name} 替换为实际短名（受 nameShorten 影响已在调用处算好）
+                const name = (style.nameShorten !== false && studentName.length >= 3)
+                    ? studentShort : studentName;
+                const example = style.studentAddress.replaceAll('{name}', name);
+                parts.push(`称呼学生时使用"${example}"（按模板"${style.studentAddress}"生成），不要使用"该生"、"这位同学"等代称。`);
+            } else {
+                // 小组模式：给出通用规则
+                parts.push(`称呼学生时按模板"${style.studentAddress}"生成（{name} 替换为按姓名规则处理后的学生名），不要使用"该生"、"这位同学"等代称。`);
+            }
+        }
+
+        if (style.parentAddress && typeof style.parentAddress === 'string') {
+            if (studentName) {
+                const example = style.parentAddress
+                    .replaceAll('{student}', studentShort || studentName)
+                    .replaceAll('{name}', studentShort || studentName);
+                parts.push(`称呼家长时使用"${example}"。`);
+            } else {
+                parts.push(`称呼家长时使用"${style.parentAddress}"（{student}/{name} 替换为对应学生短名）。`);
+            }
+        }
+
+        return parts.length > 0 ? parts.join(' ') : '';
+    }
+
+    /**
+     * 获取 System Prompt（人设）
+     * - 优先使用 style.systemPrompt（用户自定义）
+     * - 为空时回退到内置默认人设（单学生/小组两种变体）
+     * - 追加语言指令（style.language 非 zh 时注入英文输出指令）
+     *
+     * @param {object} style - 风格对象
+     * @param {boolean} [isGroup=false] - 是否小组模式
+     * @returns {string} System Prompt 内容
+     */
+    static getSystemPrompt(style, isGroup = false) {
+        let persona;
+        if (style && style.systemPrompt && typeof style.systemPrompt === 'string' && style.systemPrompt.trim()) {
+            persona = style.systemPrompt.trim();
+        } else if (isGroup) {
+            persona = '你是一位经验丰富的教育培训老师，擅长为多位学生分别撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会混淆不同学生的表现。你必须以 JSON 格式输出结果。';
+        } else {
+            persona = '你是一位经验丰富的教育培训老师，擅长撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会创造不存在的昵称。你必须以 JSON 格式输出结果。';
+        }
+
+        // 语言指令
+        if (style && style.language && style.language !== 'zh') {
+            if (style.language === 'en') {
+                persona += '\n请使用英文输出所有反馈内容。';
+            } else {
+                persona += `\n请使用 ${style.language} 语言输出所有反馈内容。`;
+            }
+        }
+        return persona;
     }
 
     /**
@@ -482,6 +559,15 @@ ${segment}
             if (mod.prompt && mod.prompt.trim()) return mod.prompt.trim();
             if (mod.description && mod.description.trim()) return mod.description.trim();
         }
+        // 读取 style.moduleDescriptionOverrides 覆盖表（第二期 P1-7）
+        try {
+            const style = Storage.getStyle();
+            if (style && style.moduleDescriptionOverrides && style.moduleDescriptionOverrides[moduleName]) {
+                return style.moduleDescriptionOverrides[moduleName];
+            }
+        } catch (e) {
+            // 忽略
+        }
         // 回退到按模块名硬编码的默认描述
         const map = {
             '课堂内容': '总结本节课讲解的主要知识点和教学内容',
@@ -666,6 +752,8 @@ ${segment}
             ? '在课后作业模块中，可以适当建议家长协助监督。'
             : '不要在反馈中提及"请家长协助"、"请家长监督"、"请家长提醒"等类似内容。';
         const customReq = style.customPrompt ? `\n\n## 用户自定义要求\n${style.customPrompt}` : '';
+        // 学生/家长称呼指令（小组模式：传 null 表示只输出通用规则，不针对单个学生）
+        const addressReq = this.getAddressInstructions(style, null, null);
 
         // 科目专属模板
         let subjectTemplateReq = '';
@@ -757,7 +845,8 @@ ${processedTranscript}
 6. ${parentReq}
 7. ${nameInstruction}
 8. ${formatReq}
-9. 请为每位学生**分别**生成独立的课堂反馈
+9. ${addressReq}
+10. 请为每位学生**分别**生成独立的课堂反馈
 ${subjectTemplateReq}
 ${promptTemplateReq}
 ${customReq}
@@ -766,14 +855,25 @@ ${customReq}
 ${moduleInstructions}
 
 ## 公共模块特殊要求（极其重要，必须严格遵守）
-【课堂内容】和【课后作业】这两个模块是**全组统一的公共内容**，描述的是整节课的客观情况，不是针对某个学生的个人反馈。因此：
-- **绝对禁止**在【课堂内容】和【课后作业】中出现任何学生姓名（包括"彦祖"、"亦凡"、"杰伦"、"小明"等）
-- **绝对禁止**在【课堂内容】和【课后作业】中使用"请某某同学"、"某某需要"、"某某在课后"等指向特定学生的表述
-- 【课堂内容】应客观描述本节课的教学内容、知识点、课堂活动，不要提及任何具体学生的表现
-- 【课后作业】应客观布置作业内容和要求，面向全体学生，不要指定由某位学生完成
-- 如果作业要求中需要提及学生，使用"同学们"、"大家"等集体称谓
+${(() => {
+  const commonMods = (style && Array.isArray(style.commonModules) && style.commonModules.length > 0)
+      ? style.commonModules : ['课堂内容', '课后作业'];
+  const term = (style && style.groupAddressTerm) || '同学们';
+  const modList = commonMods.map(m => `【${m}】`).join('和');
+  const examples = commonMods.length > 0
+      ? `【${commonMods[0]}】应客观描述本节课的教学内容、知识点、课堂活动，不要提及任何具体学生的表现`
+      : '';
+  const examples2 = commonMods.length > 1
+      ? `\n- 【${commonMods[1]}】应客观布置作业内容和要求，面向全体学生，不要指定由某位学生完成`
+      : '';
+  return `${modList}这两个模块是**全组统一的公共内容**，描述的是整节课的客观情况，不是针对某个学生的个人反馈。因此：
+- **绝对禁止**在${modList}中出现任何学生姓名（包括"彦祖"、"亦凡"、"杰伦"、"小明"等）
+- **绝对禁止**在${modList}中使用"请某某同学"、"某某需要"、"某某在课后"等指向特定学生的表述
+- ${examples}${examples2}
+- 如果作业要求中需要提及学生，使用"${term}"、"大家"等集体称谓
 - 错误的例子："请彦祖在课后独立完成..."、"亦凡需要复习..."、"杰伦的时间轴作业..."
-- 正确的例子："请同学们在课后独立完成..."、"本次作业要求大家..."
+- 正确的例子："请${term}在课后独立完成..."、"本次作业要求大家..."`;
+})()}
 
 ## 输出格式（必须严格遵守）
 你必须输出合法的 JSON 对象，格式如下：
@@ -807,7 +907,11 @@ ${moduleInstructions}
 - studentName 必须使用学生的全名
 - module 必须是上述列出的模块名之一
 - content 为该模块的反馈内容
-- 【课堂内容】和【课后作业】对所有学生应该是**完全相同**的客观描述`;
+- ${(() => {
+  const cm = (style && Array.isArray(style.commonModules) && style.commonModules.length > 0)
+      ? style.commonModules : ['课堂内容', '课后作业'];
+  return cm.map(m => `【${m}】`).join('和');
+})()}对所有学生应该是**完全相同**的客观描述`;
 
         const baseUrl = Storage.getApiBaseUrl() || 'https://api.deepseek.com';
         try {
@@ -820,11 +924,11 @@ ${moduleInstructions}
                 body: JSON.stringify({
                     model: AiService.getModel(),
                     messages: [
-                        { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长为多位学生分别撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会混淆不同学生的表现。你必须以 JSON 格式输出结果。' },
+                        { role: 'system', content: AiService.getSystemPrompt(style, true) },
                         { role: 'user', content: prompt }
                     ],
-                    temperature: 0.7,
-                    max_tokens: this.MAX_OUTPUT_TOKENS,
+                    temperature: (style && typeof style.temperature === 'number') ? style.temperature : 0.7,
+                    max_tokens: (style && style.maxOutputTokens) ? style.maxOutputTokens : this.MAX_OUTPUT_TOKENS,
                     response_format: { type: 'json_object' }
                 }),
                 signal
@@ -1090,27 +1194,48 @@ ${moduleInstructions}
     }
 
     /**
-     * 智能分析一段课堂反馈样本，反推系统的可配置项（语气/emoji/模块/标题/格式等）。
-     * 返回结构化 JSON，由前端展示预览并让用户勾选应用。
+     * 智能分析课堂反馈样本，反推系统的可配置项（语气/emoji/模块/标题/格式等）。
+     * 支持单样本（string）或多样本（string[]）综合分析。
+     * 多样本时 AI 会综合判断找出一致的配置；冲突字段返回 null。
      *
-     * @param {string} sampleText - 用户粘贴的完整反馈样本（含标题+正文）
+     * @param {string|string[]} samples - 反馈样本（含标题+正文）。字符串数组表示多样本
      * @param {object} [options]
      * @param {AbortSignal} [options.signal]
      * @returns {Promise<object>} 分析结果，字段对齐系统可配置项；无法推断的字段为 null
      */
-    static async analyzeFeedbackStyle(sampleText, { signal } = {}) {
+    static async analyzeFeedbackStyle(samples, { signal } = {}) {
         const apiKey = Storage.getApiKey();
         if (!apiKey) throw new Error('请先设置 API Key');
-        const trimmed = (sampleText || '').trim();
-        if (!trimmed) throw new Error('样本内容为空');
 
-        const systemPrompt = `你是一位课堂反馈文案分析专家。你需要分析用户提供的"课堂反馈样本"，反推出一套能复刻该样本风格的系统配置。
+        // 归一化为数组：单字符串视为单样本
+        const sampleArr = Array.isArray(samples)
+            ? samples.map(s => (s || '').trim()).filter(Boolean)
+            : [(samples || '').trim()].filter(Boolean);
+        if (sampleArr.length === 0) throw new Error('样本内容为空');
+
+        const isMulti = sampleArr.length > 1;
+
+        // 拼接样本：每个样本用分隔线标注"样本 N"
+        const samplesBlock = sampleArr.map((s, i) =>
+            `=== 样本 ${i + 1} ===\n${s}`
+        ).join('\n\n');
+
+        const systemPrompt = `你是一位课堂反馈文案分析专家。你需要分析用户提供的"课堂反馈样本"${isMulti ? '（可能多份）' : ''}，反推出一套能复刻该样本风格的系统配置。
 你必须严格输出 JSON，不要输出任何 JSON 之外的内容（不要 markdown 代码块标记、不要解释）。无法从样本中确定的字段一律返回 null。`;
 
-        const userPrompt = `请分析以下课堂反馈样本，反推系统配置。
+        const multiGuidance = isMulti ? `
+## 多样本分析要点
+用户提供了 ${sampleArr.length} 份样本。请综合分析所有样本：
+1. 一致性优先：所有样本都体现的配置才是高置信度推断
+2. 冲突处理：不同样本出现冲突的字段（如一份用 emoji 一份不用）一律返回 null，不要二选一
+3. 模块列表：以出现频次最高、覆盖最完整的样本为准；合并所有样本中出现过的模块名
+4. 字数范围：综合所有样本估算合理的 min/max 区间，而非单一样本的值
+5. 标题模板：从所有样本标题中归纳通用模板；若标题格式差异较大无法统一，返回 null` : '';
+
+        const userPrompt = `请分析以下课堂反馈样本${isMulti ? `（共 ${sampleArr.length} 份）` : ''}，反推系统配置。
 
 ## 课堂反馈样本
-${trimmed}
+${samplesBlock}
 
 ## 需要反推的配置字段（输出 JSON，字段名必须完全一致）
 
@@ -1141,7 +1266,25 @@ ${trimmed}
     }
   ],
 
-  "customPrompt": "整体写作要求备注（1-3句话，总结样本的整体写作风格、语气特点、特殊要求，作为每次生成反馈时的追加要求）。无特殊要求返回空字符串"
+  "commonModules": "公共模块名数组（小组模式下对所有学生保持一致内容的模块，通常是描述整节课客观情况的模块，如课堂内容/课后作业）。从样本内容判断哪些模块是面向全体而非个人；无明确迹象返回 null",
+  "groupAddressTerm": "小组模式公共模块中的集体称谓（如'同学们'/'大家'/'各位同学'）。样本中未出现集体称谓返回 null",
+
+  "useOpening": true或false，样本是否在标题前有开场白（如'家长您好，我是XX老师'）,
+  "feedbackOpening": "开场白文本模板。从样本标题前的文字反推，用占位符 {家长}{老师}{学生}{科目}{日期}{机构} 还原。useOpening 为 false 时返回空字符串",
+  "useClosing": true或false，样本是否在末尾有结尾话术（如'如有疑问随时联系'）,
+  "feedbackClosing": "结尾话术文本。从样本末尾文字反推。useClosing 为 false 时返回空字符串",
+
+  "studentAddress": "学生称呼模板（如'{name}同学'/'{name}小朋友'）。从样本中对学生的称呼反推；样本未使用特殊称呼返回 null",
+  "parentAddress": "家长称呼（如'家长您好'/'XX妈妈'）。从样本中对家长的称呼反推；未出现返回 null",
+
+  "useAttachmentHint": true或false，样本末尾是否有附件/照片/视频提示,
+  "attachmentHint": "附件提示文本。从样本末尾反推；useAttachmentHint 为 false 时返回空字符串",
+
+  "customPrompt": "整体写作要求备注（1-3句话，总结样本的整体写作风格、语气特点、特殊要求，作为每次生成反馈时的追加要求）。无特殊要求返回空字符串",
+
+  "language": "样本输出语言，从以下枚举选一：zh(中文) | en(English) | ja(日本語)。若样本为纯中文返回 zh；纯英文返回 en；纯日文返回 ja；混合或无法判断返回 null",
+  "groupNameSeparator": "小组模式下多学生姓名的连接符。仅当样本标题或正文出现多个学生姓名拼接时反推（如'小明、小红'→'、'；'小明,小红'→','；'小明 小红'→' '）。单学生样本或无拼接迹象返回 null",
+  "systemPrompt": "自定义系统 Prompt。仅当样本风格极其特殊、无法用上述字段（语气/分点/emoji/模块等）复刻时，才给出一段完整的系统人设指令（覆盖默认人设）。绝大多数情况返回 null——优先用其他字段组合复刻风格"
 }
 
 ## 分析要点
@@ -1149,7 +1292,7 @@ ${trimmed}
 2. 模块字数：估算每个模块内容的字数范围，给出合理的 min/max
 3. emoji 位置：仔细观察 emoji 出现的规律（标题里、内容里、模块末尾）
 4. 标题模板：尽量用占位符还原样本标题的拼接方式，保持原有分隔符
-5. 无法确定的字段必须返回 null，不要臆测`;
+5. 无法确定的字段必须返回 null，不要臆测${multiGuidance}`;
 
         const content = await this.chatCompletion([
             { role: 'system', content: systemPrompt },

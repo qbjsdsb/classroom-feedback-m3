@@ -25,7 +25,6 @@ const DEFAULT_STYLE = {
     useEmoji: false,        // 默认关闭表情
     emojiPosition: 'content', // content(内容中), title(标题后), end(模块末尾), none(不使用)
     customPrompt: '',
-    language: 'zh',
     // 全局字数限制（后备值）
     minLength: 50,          // 每模块最少字数
     maxLength: 150,         // 每模块最多字数
@@ -56,7 +55,57 @@ const DEFAULT_STYLE = {
     // 模块名包裹符号：'【】' | '[]' | '（）' | '·' | 'none' | 自定义双字符
     moduleWrap: '【】',
     // 模块间分隔符
-    moduleSeparator: '\n\n'
+    moduleSeparator: '\n\n',
+
+    // ===== 通用化扩展（第一期） =====
+    // 公共模块（小组模式下对所有学生保持一致内容的模块名列表）
+    // 默认 ['课堂内容', '课后作业']，向后兼容；机构可自定义
+    commonModules: ['课堂内容', '课后作业'],
+    // 小组模式公共模块的集体称谓（替换学生姓名）
+    groupAddressTerm: '同学们',
+
+    // 反馈开场白/结尾话术（默认关闭，开启后拼接到反馈首尾）
+    useOpening: false,
+    feedbackOpening: '',   // 支持 {家长} {老师} {学生} {科目} {日期} 占位符
+    useClosing: false,
+    feedbackClosing: '',
+
+    // 学生/家长称呼方式（默认空=沿用现有 nameShorten 逻辑；非空时按模板生成称呼）
+    // studentAddress 占位符 {name}，如 '{name}同学'；为空时不注入额外称呼指令
+    studentAddress: '',
+    // parentAddress 如 '家长您好' / '{student}妈妈'；为空时不注入
+    parentAddress: '',
+
+    // 附件说明占位（默认关闭，开启后在反馈末尾追加固定文字提示家长查收照片/视频）
+    useAttachmentHint: false,
+    attachmentHint: '\n\n📷 课堂照片/视频已单独发送，请注意查收',
+
+    // ===== 导出格式模板化（第二期 P1-6） =====
+    // 导出文件头部标题行（默认 '课堂反馈记录'，可改成机构名）
+    exportHeader: '课堂反馈记录',
+    // 头部标题下方的分隔线（默认 16 个等号）
+    exportTitleSeparator: '================',
+    // 每条反馈记录之间的分隔线（默认 30 个 ─）
+    exportEntrySeparator: '─'.repeat(30),
+
+    // ===== 模块默认描述表 + icon 映射表可覆盖（第二期 P1-7） =====
+    // 为空对象时回退到代码内置硬编码映射；非空时按模块名覆盖
+    moduleIconOverrides: {},
+    moduleDescriptionOverrides: {},
+
+    // ===== 高级参数（第三期 P2） =====
+    // System Prompt 人设（为空时回退到代码内置默认人设）
+    systemPrompt: '',
+    // API 调用温度（0-2，越高越随机；默认 0.7）
+    temperature: 0.7,
+    // API 输出 token 上限（默认 16384）
+    maxOutputTokens: 16384,
+    // 历史保留条数（默认 50）
+    historyLimit: 50,
+    // 反馈语言（'zh' 中文 / 'en' 英文；默认 zh，prompt 注入语言指令）
+    language: 'zh',
+    // 标题小组姓名连接符（默认 '、'）
+    groupNameSeparator: '、'
 };
 
 const DEFAULT_THEME = 'default'; // default, dark, warm, green

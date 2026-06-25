@@ -24,7 +24,7 @@ import { UI } from '../utils/ui';
 import AiService from '../services/aiService';
 import {
   generateFeedbackTitle, getModuleIcon, resolveModuleWrap,
-  copyToClipboard, buildFeedbackText,
+  copyToClipboard, buildFeedbackText, getDateStr, getDisplayName,
 } from '../utils/feedback';
 import { adaptColorForTheme } from '../utils/color';
 
@@ -162,7 +162,16 @@ export default function HistoryPage() {
       getStudentById: store.getStudentById.bind(store),
       style,
     });
-    const text = buildFeedbackText(item.feedback || [], title, style);
+    // 构造开场白/结尾占位符上下文
+    const ctx = {
+      student: getDisplayName(currentStudent.name, style),
+      subject: subject ? subject.name : '',
+      teacher: (style && style.teacherName) || '',
+      date: getDateStr(style),
+      institution: (style && style.institutionName) || '',
+      parent: '家长',
+    };
+    const text = buildFeedbackText(item.feedback || [], title, style, ctx);
     const ok = await copyToClipboard(text);
     if (ok) UI.showToast('已复制到剪贴板');
     else UI.showToast('复制失败，请手动复制');
@@ -192,13 +201,19 @@ export default function HistoryPage() {
     const style = Storage.getStyle();
     const wrap = resolveModuleWrap(style.moduleWrap);
     const sep = style.moduleSeparator ?? '\n\n';
-    let text = `课堂反馈记录\n================\n\n`;
+    // 导出格式模板化：标题行、分隔符、日期包裹符号均可配（默认值与原硬编码一致）
+    const exportHeader = (style.exportHeader ?? '课堂反馈记录').trim();
+    const exportTitleSeparator = (style.exportTitleSeparator ?? '================');
+    const exportEntrySeparator = (style.exportEntrySeparator ?? '─'.repeat(30));
+    let text = '';
+    if (exportHeader) text += `${exportHeader}\n`;
+    if (exportTitleSeparator) text += `${exportTitleSeparator}\n\n`;
     items.forEach(item => {
       const subject = subjectMap[item.subjectId];
       const date = new Date(item.createdAt);
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       text += `【${dateStr}】${subject ? subject.name : '未分类'}\n`;
-      text += '─'.repeat(30) + '\n';
+      if (exportEntrySeparator) text += `${exportEntrySeparator}\n`;
       const parts = (item.feedback || []).map(f => `${wrap.open}${f.module}${wrap.close}\n${f.content}`);
       text += parts.join(sep) + '\n\n';
       text += '\n';
@@ -582,16 +597,20 @@ ${feedbackSummary}
             </DialogTitle>
             <DialogContent dividers>
               <Stack spacing={2}>
-                {(detailItem.feedback || []).map((f, i) => (
-                  <Box key={i}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
-                      {getModuleIcon(f.module)} 【{f.module}】
-                    </Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {f.content}
-                    </Typography>
-                  </Box>
-                ))}
+                {(() => {
+                  const style = Storage.getStyle();
+                  const wrap = resolveModuleWrap(style.moduleWrap);
+                  return (detailItem.feedback || []).map((f, i) => (
+                    <Box key={i}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                        {getModuleIcon(f.module)} {wrap.open}{f.module}{wrap.close}
+                      </Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {f.content}
+                      </Typography>
+                    </Box>
+                  ));
+                })()}
               </Stack>
             </DialogContent>
             <DialogActions>

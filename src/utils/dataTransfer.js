@@ -8,6 +8,173 @@ import { store } from '../store';
 import { UI } from './ui';
 
 /**
+ * 仅导出配置类数据（不含学生/历史/快捷回复等业务数据），用于换机构时迁移配置。
+ * 包含：style、modules、科目列表、科目专属模板、Prompt 模板库
+ * 返回配置对象（同时触发文件下载）。
+ */
+export function exportConfig() {
+  const config = {
+    type: 'classroom-feedback-config',
+    version: 1,
+    exportDate: new Date().toISOString(),
+    style: Storage.getStyle(),
+    modules: Storage.getModules(),
+    subjects: store.getSubjects(),
+    subjectTemplates: {},
+    promptTemplates: store.getPromptTemplates(),
+  };
+  // 科目专属模板
+  store.getSubjects().forEach(s => {
+    const template = store.getSubjectTemplate(s.id);
+    if (template) {
+      config.subjectTemplates[s.id] = template;
+    }
+  });
+
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `classroom-config-${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  UI.showToast('配置已导出');
+  return config;
+}
+
+/**
+ * 校验配置文件结构。校验失败抛出带可读信息的 Error。
+ */
+function validateConfigData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('文件内容不是有效的 JSON 对象');
+  }
+  if (data.type && data.type !== 'classroom-feedback-config') {
+    throw new Error('文件类型不匹配，期望 classroom-feedback-config，实际 ' + data.type);
+  }
+  // style 必须是对象
+  if (Object.prototype.hasOwnProperty.call(data, 'style')) {
+    if (typeof data.style !== 'object' || Array.isArray(data.style)) {
+      throw new Error('style 字段必须是对象');
+    }
+  }
+  // modules 必须是数组
+  if (Object.prototype.hasOwnProperty.call(data, 'modules') && !Array.isArray(data.modules)) {
+    throw new Error('modules 字段必须是数组');
+  }
+  // subjects 必须是数组
+  if (Object.prototype.hasOwnProperty.call(data, 'subjects') && !Array.isArray(data.subjects)) {
+    throw new Error('subjects 字段必须是数组');
+  }
+  // subjectTemplates 必须是对象
+  if (Object.prototype.hasOwnProperty.call(data, 'subjectTemplates')) {
+    if (typeof data.subjectTemplates !== 'object' || Array.isArray(data.subjectTemplates)) {
+      throw new Error('subjectTemplates 字段必须是对象');
+    }
+  }
+  // promptTemplates 必须是数组
+  if (Object.prototype.hasOwnProperty.call(data, 'promptTemplates') && !Array.isArray(data.promptTemplates)) {
+    throw new Error('promptTemplates 字段必须是数组');
+  }
+}
+
+/**
+ * 仅导入配置类数据（覆盖 style/modules/subjects/subjectTemplates/promptTemplates）。
+ * 不动学生、反馈历史、快捷回复等业务数据。
+ *
+ * @param {File} file - 用户选择的 JSON 配置文件
+ * @param {object} [options]
+ * @param {boolean} [options.replaceSubjects=true] - 是否覆盖科目列表（true=替换，false=保留现有）
+ * @returns {Promise<{snapshot: object}>} 导入成功返回应用前快照（用于撤销）
+ */
+export function importConfig(file, { replaceSubjects = true } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error('未选择文件'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let data;
+      try {
+        data = JSON.parse(e.target.result);
+      } catch {
+        UI.showToast('导入失败：文件格式错误，无法解析为 JSON');
+        reject(new Error('文件格式错误'));
+        return;
+      }
+      try {
+        validateConfigData(data);
+      } catch (validationErr) {
+        UI.showToast('导入失败：' + validationErr.message);
+        reject(validationErr);
+        return;
+      }
+
+      // 应用前快照（用于撤销）
+      const snapshot = {
+        style: JSON.parse(JSON.stringify(Storage.getStyle())),
+        modules: JSON.parse(JSON.stringify(Storage.getModules())),
+        subjects: JSON.parse(JSON.stringify(store.getSubjects())),
+        subjectTemplates: JSON.parse(JSON.stringify(store._subjectTemplatesCache || {})),
+        promptTemplates: JSON.parse(JSON.stringify(store._promptTemplatesCache || [])),
+      };
+
+      try {
+        if (data.style) Storage.saveStyle(data.style);
+        if (data.modules) Storage.saveModules(data.modules);
+        if (replaceSubjects && data.subjects) {
+          store._subjects = data.subjects;
+          store._saveSubjects();
+        }
+        if (data.subjectTemplates && typeof data.subjectTemplates === 'object') {
+          // 替换模式：先清空缓存再写入
+          store._subjectTemplatesCache = {};
+          Object.entries(data.subjectTemplates).forEach(([subjectId, template]) => {
+            try {
+              store._subjectTemplatesCache[subjectId] = template;
+              DB.putRecord('subjectTemplates', { subjectId, template });
+            } catch (err) {
+              console.warn(`导入科目模板失败 (${subjectId}):`, err);
+            }
+          });
+        }
+        if (data.promptTemplates && Array.isArray(data.promptTemplates)) {
+          store._promptTemplatesCache = data.promptTemplates;
+          store._savePromptTemplates();
+        }
+
+        UI.showToast('配置已导入，页面即将刷新');
+        setTimeout(() => location.reload(), 1500);
+        resolve({ snapshot });
+      } catch (err) {
+        // 导入失败：回滚
+        try {
+          Storage.saveStyle(snapshot.style);
+          Storage.saveModules(snapshot.modules);
+          store._subjects = snapshot.subjects;
+          store._saveSubjects();
+          store._subjectTemplatesCache = snapshot.subjectTemplates;
+          store._promptTemplatesCache = snapshot.promptTemplates;
+          store._savePromptTemplates();
+        } catch (restoreErr) {
+          console.error('回滚失败:', restoreErr);
+        }
+        UI.showToast('导入失败：' + (err.message || '未知错误，已恢复原配置'));
+        reject(err);
+      }
+    };
+    reader.onerror = () => {
+      UI.showToast('导入失败：文件读取错误');
+      reject(new Error('文件读取错误'));
+    };
+    reader.readAsText(file);
+  });
+}
+
+/**
  * 导出所有数据为 JSON 文件
  */
 export function exportData() {
