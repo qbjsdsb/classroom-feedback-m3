@@ -477,6 +477,9 @@ ${feedbackSummary}
                       sx={{
                         borderLeft: 3,
                         borderColor: subject?.color || 'primary.main',
+                        // M3 状态层：hover 时叠加 6% primary + 轻微抬升
+                        transition: 'box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s cubic-bezier(0.2, 0, 0, 1)',
+                        '&:hover': { boxShadow: 1, bgcolor: 'action.hover' },
                       }}
                     >
                       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>

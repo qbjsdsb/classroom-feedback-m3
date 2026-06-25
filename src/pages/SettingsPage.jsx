@@ -569,7 +569,7 @@ export default function SettingsPage() {
         <IconButton onClick={() => navigate('/students')} aria-label="返回">
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>⚙️ 系统设置</Typography>
+        <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 500 }}>系统设置</Typography>
       </Stack>
 
       {/* 电脑端2列 masonry：CSS multi-column，卡片按高度自动流动填充，避免单列过长 */}

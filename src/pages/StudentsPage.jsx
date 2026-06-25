@@ -267,7 +267,8 @@ export default function StudentsPage() {
                     borderColor: isGroupMode && isSelected ? 'primary.main' : 'divider',
                     borderWidth: isGroupMode && isSelected ? 2 : 1,
                     bgcolor: isGroupMode && isSelected ? 'action.selected' : 'background.paper',
-                    '&:hover': { boxShadow: 2 },
+                    // M3 状态层：hover 叠加 6% primary + 轻微抬升
+                    '&:hover': { boxShadow: 1, bgcolor: 'action.hover' },
                   }}
                 >
                   <CardContent sx={{ display: 'flex', alignItems: 'center', py: 1.5, '&:last-child': { pb: 1.5 } }}>

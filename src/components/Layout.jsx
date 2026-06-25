@@ -28,12 +28,19 @@ export default function Layout({ children }) {
 
   const Sidebar = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Toolbar sx={{ px: 3, minHeight: 64 }}>
+      <Toolbar sx={{ px: 2.5, minHeight: 60 }}>
+        <Box sx={{
+          width: 32, height: 32, borderRadius: 1.5, bgcolor: 'primary.main',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 1.5,
+          color: 'primary.contrastText',
+        }}>
+          <MicIcon sx={{ fontSize: 18 }} />
+        </Box>
         <Typography variant="subtitle1" sx={{ fontWeight: 500, letterSpacing: 0.15 }}>
           课堂反馈助手
         </Typography>
       </Toolbar>
-      <List sx={{ flex: 1, px: 2, py: 1 }}>
+      <List sx={{ flex: 1, px: 1.5, py: 1 }}>
         {navItems.map((item) => {
           const selected = location.pathname.startsWith(item.path);
           return (
@@ -44,14 +51,15 @@ export default function Layout({ children }) {
               sx={{
                 borderRadius: 28,
                 mb: 0.5,
-                py: 1,
-                pl: 2,
-                // M3 navigation drawer item：选中态用 tonal 高亮
+                py: 0.875,
+                pl: 1.75,
+                // M3 navigation drawer item：选中态 tonal 高亮 + 全圆角 pill
                 '&.Mui-selected': { bgcolor: 'action.selected' },
                 '&.Mui-selected:hover': { bgcolor: 'action.selected' },
+                '&:hover': { bgcolor: 'action.hover' },
               }}
             >
-              <ListItemIcon sx={{ minWidth: 40, color: selected ? 'primary.main' : 'text.secondary' }}>
+              <ListItemIcon sx={{ minWidth: 36, color: selected ? 'primary.main' : 'text.secondary' }}>
                 {item.icon}
               </ListItemIcon>
               <ListItemText
@@ -66,12 +74,12 @@ export default function Layout({ children }) {
         })}
       </List>
       <Divider />
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: 1.5 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <IconButton onClick={toggleMode} size="small" aria-label="切换主题" sx={{ bgcolor: 'action.hover' }}>
             {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
           </IconButton>
-          <Typography variant="caption" color="text.secondary">Material 3 · v0.2</Typography>
+          <Typography variant="caption" color="text.secondary">Material 3 · v0.3</Typography>
         </Stack>
       </Box>
     </Box>

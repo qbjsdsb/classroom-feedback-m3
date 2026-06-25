@@ -6,3 +6,62 @@ body,
   padding: 0;
   min-height: 100vh;
 }
+
+/* ========== M3 录音精致化动画 ========== */
+
+/* Fab 录音中脉冲环：模拟 M3 motion 表达"正在录音"状态 */
+@keyframes m3-recording-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(186, 26, 26, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 16px rgba(186, 26, 26, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(186, 26, 26, 0);
+  }
+}
+
+.m3-fab-recording {
+  animation: m3-recording-pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 录音波形条：3 根柱子错位跳动，表达"正在收音" */
+@keyframes m3-wave-bounce {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+.m3-wave-bar {
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  margin: 0 1.5px;
+  background-color: currentColor;
+  border-radius: 2px;
+  transform-origin: center;
+  animation: m3-wave-bounce 1s ease-in-out infinite;
+}
+
+.m3-wave-bar:nth-child(2) { animation-delay: 0.15s; }
+.m3-wave-bar:nth-child(3) { animation-delay: 0.3s; }
+.m3-wave-bar:nth-child(4) { animation-delay: 0.45s; }
+.m3-wave-bar:nth-child(5) { animation-delay: 0.6s; }
+
+/* M3 标准滚动条：更细更克制，电脑端更精致 */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(103, 80, 164, 0.2);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(103, 80, 164, 0.35);
+  }
+}

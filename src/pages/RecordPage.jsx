@@ -8,7 +8,7 @@ import {
   Box, Stack, Typography, IconButton, Button, Fab, TextField, Chip, Card,
   CardContent, LinearProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Drawer, List, ListItemButton, ListItemIcon, ListItemText, Divider, Collapse,
-  ToggleButtonGroup, ToggleButton, CircularProgress,
+  ToggleButtonGroup, ToggleButton, CircularProgress, useMediaQuery, useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MicIcon from '@mui/icons-material/Mic';
@@ -65,6 +65,8 @@ export default function RecordPage() {
   const session = useSession();
   const recorder = useRecorder();
   const { currentStudent, currentGroup, currentSubject, setCurrentSubject } = session;
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
   // ========== 本地 UI state ==========
   const [quickRepliesExpanded, setQuickRepliesExpanded] = useState(true);
@@ -461,277 +463,306 @@ export default function RecordPage() {
         </IconButton>
       </Stack>
 
-      {/* ========== 课堂计时器 ========== */}
-      <Box sx={{ textAlign: 'center', my: 2 }}>
-        <Typography
-          variant="h4"
-          sx={{
-            fontWeight: 300,
-            fontVariantNumeric: 'tabular-nums',
-            color: recorder.isRecording ? 'primary.main' : 'text.primary',
-          }}
-        >
-          {recorder.classTimerText}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">课堂时长</Typography>
-      </Box>
+      {/* ========== 录音控制区（横屏适配：电脑端横向布局） ========== */}
+      <Card variant="outlined" sx={{ mb: 2, bgcolor: 'background.paper' }}>
+        <CardContent>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={{ xs: 2, md: 3 }}
+            sx={{ alignItems: 'center' }}
+          >
+            {/* 左：Fab 录音按钮 */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              <Fab
+                ref={btnRef}
+                color={recorder.isRecording ? 'error' : 'primary'}
+                className={recorder.isRecording ? 'm3-fab-recording' : ''}
+                sx={{
+                  width: 64,
+                  height: 64,
+                  boxShadow: recorder.longPressActive ? 6 : 1,
+                  transform: recorder.longPressActive ? 'scale(1.05)' : 'scale(1)',
+                }}
+                aria-label={recorder.isRecording ? '停止录音' : '开始录音'}
+              >
+                {recorder.isRecording ? <StopIcon /> : <MicIcon />}
+              </Fab>
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                长按录音
+              </Typography>
+            </Box>
 
-      {/* ========== 录音区域 ========== */}
-      <Stack spacing={2} sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-            <Fab
-              ref={btnRef}
-              color={recorder.isRecording ? 'error' : 'primary'}
-              sx={{
-                width: 72,
-                height: 72,
-                boxShadow: recorder.longPressActive ? 6 : 1,
-                transform: recorder.longPressActive ? 'scale(1.05)' : 'scale(1)',
-                transition: 'all 0.2s',
-              }}
-              aria-label={recorder.isRecording ? '停止录音' : '开始录音'}
+            {/* 中：计时器 + 状态（电脑端垂直排列，手机端水平） */}
+            <Box sx={{ flex: 1, minWidth: 0, textAlign: { xs: 'center', md: 'left' } }}>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={{ xs: 0.5, md: 2 }}
+                sx={{ alignItems: { xs: 'center', md: 'baseline' } }}
+              >
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 300,
+                    fontVariantNumeric: 'tabular-nums',
+                    color: recorder.isRecording ? 'primary.main' : 'text.primary',
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {recorder.classTimerText}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">课堂时长</Typography>
+              </Stack>
+
+              {/* 录音计时器（单次录音时长，区别于课堂总时长） */}
+              {recorder.timerText && (
+                <Typography variant="body2" color="primary" sx={{ fontVariantNumeric: 'tabular-nums', mt: 0.5 }}>
+                  本次录音 {recorder.timerText}
+                </Typography>
+              )}
+
+              {/* 状态行：录音中显示波形条 + 文案 */}
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5, justifyContent: { xs: 'center', md: 'flex-start' } }}>
+                {recorder.isRecording && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', color: 'error.main', height: 16 }}>
+                    <span className="m3-wave-bar" />
+                    <span className="m3-wave-bar" />
+                    <span className="m3-wave-bar" />
+                    <span className="m3-wave-bar" />
+                    <span className="m3-wave-bar" />
+                  </Box>
+                )}
+                <Typography variant="body2" color="text.secondary">
+                  {recorder.connectionStatus
+                    || (recorder.isRecording ? '正在录音…' : recorder.isPaused ? '已暂停，点击继续' : '点击开始录制课堂内容')}
+                </Typography>
+              </Stack>
+
+              {recorder.isPaused && (
+                <Button variant="outlined" color="error" size="small" onClick={() => recorder.stop()} sx={{ mt: 1, textTransform: 'none' }}>
+                  完全停止
+                </Button>
+              )}
+            </Box>
+
+            {/* 右：导入录音（电脑端独立一列，手机端在下方） */}
+            <Box sx={{ textAlign: 'center', minWidth: { md: 160 } }}>
+              <Button
+                size="small"
+                startIcon={<UploadFileIcon />}
+                onClick={() => fileInputRef.current?.click()}
+                sx={{ textTransform: 'none' }}
+              >
+                导入录音文件
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={handleFileImport}
+                style={{ display: 'none' }}
+                aria-label="导入录音文件"
+              />
+              {recorder.importProgress.visible && (
+                <Box sx={{ mt: 1 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={recorder.importProgress.percent}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    {recorder.importProgress.status}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Divider sx={{ my: 2 }} />
+
+      {/* ========== 主编辑区（电脑端双列：左文本框 | 右快捷回复+模板） ========== */}
+      <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: '1fr 320px' },
+        gap: 2,
+        mb: 2,
+        alignItems: 'start',
+      }}>
+        {/* 左列：文本框 + 生成按钮 */}
+        <Box>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary">课堂内容（可直接输入或编辑）</Typography>
+            <Stack direction="row" spacing={1}>
+              {currentStudent && (
+                <Button size="small" startIcon={<BookmarkIcon />} onClick={saveAsTemplate} sx={{ textTransform: 'none' }}>
+                  保存为常用点评
+                </Button>
+              )}
+              <Button size="small" color="error" onClick={() => recorder.clearTranscript()} sx={{ textTransform: 'none' }}>
+                清空
+              </Button>
+            </Stack>
+          </Stack>
+
+          {/* 小组模式：姓名快速插入按钮 */}
+          {currentGroup && currentGroup.length >= 2 && (
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mb: 1, useFlexGap: true }}>
+              {currentGroup.map(id => {
+                const s = store.getStudentById(id);
+                return s ? (
+                  <Chip
+                    key={id}
+                    label={`@${s.name}`}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => insertStudentName(s.name)}
+                  />
+                ) : null;
+              })}
+              <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                点击插入姓名标记，帮助AI区分
+              </Typography>
+            </Stack>
+          )}
+
+          <TextField
+            inputRef={textareaRef}
+            multiline
+            minRows={isDesktop ? 10 : 6}
+            fullWidth
+            value={recorder.displayText}
+            onChange={(e) => recorder.handleTextChange(e.target.value)}
+            placeholder={'请在此输入本节课的课堂内容，例如：\n• 今天复习了二次函数\n• 学生掌握了配方法\n• 作业是练习册第15页\n\n建议使用电脑端浏览器操作，输入更方便…'}
+            inputProps={{ 'aria-label': '课堂内容' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            字数：{wordCount}
+          </Typography>
+
+          {/* 生成反馈按钮（紧贴文本框下方） */}
+          <Stack spacing={1} sx={{ mt: 2 }}>
+            <Button
+              variant="contained"
+              size="medium"
+              fullWidth
+              startIcon={generating ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
+              onClick={generateFeedback}
+              disabled={generating}
+              sx={{ textTransform: 'none', borderRadius: 16 }}
             >
-              {recorder.isRecording ? <StopIcon /> : <MicIcon />}
-            </Fab>
-            {recorder.isPaused && (
-              <Button variant="outlined" color="error" onClick={() => recorder.stop()}>
-                完全停止
+              {generating ? '生成中...' : '生成反馈'}
+            </Button>
+            {currentStudent && (
+              <Button
+                variant="outlined"
+                startIcon={<HistoryIcon />}
+                onClick={() => navigate('/history')}
+                sx={{ textTransform: 'none', borderRadius: 20 }}
+              >
+                查看历史反馈
               </Button>
             )}
           </Stack>
-
-          {/* 连接进度提示 */}
-          {recorder.connectionStatus && (
-            <Typography color="text.secondary" variant="body2">
-              {recorder.connectionStatus}
-            </Typography>
-          )}
-          {/* 录音计时器 */}
-          {recorder.timerText && (
-            <Typography variant="h6" color="primary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-              {recorder.timerText}
-            </Typography>
-          )}
-          {/* 状态文案 */}
-          {!recorder.isRecording && !recorder.connectionStatus && (
-            <Typography color="text.secondary" variant="body2">
-              {recorder.isPaused ? '已暂停，点击继续' : '点击开始录制课堂内容'}
-            </Typography>
-          )}
-          {/* 长按提示 */}
-          <Typography variant="caption" color="text.secondary">
-            长按录音，松手停止
-          </Typography>
         </Box>
 
-        {/* 导入录音文件 */}
-        <Box sx={{ textAlign: 'center' }}>
-          <Button
-            size="small"
-            startIcon={<UploadFileIcon />}
-            onClick={() => fileInputRef.current?.click()}
-            sx={{ textTransform: 'none' }}
-          >
-            导入录音文件（语音转文字）
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            onChange={handleFileImport}
-            style={{ display: 'none' }}
-            aria-label="导入录音文件"
-          />
-          {recorder.importProgress.visible && (
-            <Box sx={{ mt: 1 }}>
-              <LinearProgress
-                variant="determinate"
-                value={recorder.importProgress.percent}
-              />
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                {recorder.importProgress.status}
-              </Typography>
+        {/* 右列：快捷回复 + 学生常用模板（电脑端固定侧栏，手机端在文本框下方） */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* 快捷回复库 */}
+          <Box>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>快捷回复</Typography>
+              <Stack direction="row" spacing={0.5}>
+                <IconButton size="small" onClick={() => setAddQuickReplyOpen(true)} aria-label="添加快捷回复">
+                  <AddIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => setQuickRepliesExpanded(!quickRepliesExpanded)} aria-label="展开/收起快捷回复">
+                  {quickRepliesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+              </Stack>
+            </Stack>
+            <Collapse in={quickRepliesExpanded}>
+              {quickReplies.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">暂无快捷回复，点击 + 添加</Typography>
+              ) : (
+                <Stack spacing={1.5}>
+                  {quickReplyCategories.map(cat => (
+                    <Box key={cat}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        {cat}
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true }}>
+                        {quickReplies.filter(r => r.category === cat).map(r => {
+                          const short = r.content.substring(0, 20) + (r.content.length > 20 ? '...' : '');
+                          return (
+                            <Chip
+                              key={r.id}
+                              label={short}
+                              size="small"
+                              onClick={() => insertQuickReply(r.content)}
+                              onDelete={() => deleteQuickReply(r.id)}
+                              deleteIcon={<DeleteIcon />}
+                              sx={{ cursor: 'pointer' }}
+                              title={r.content}
+                            />
+                          );
+                        })}
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Collapse>
+          </Box>
+
+          {/* 学生常用模板 */}
+          {currentStudent && (
+            <Box>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>{currentStudent.name}的常用点评</Typography>
+                <IconButton size="small" onClick={() => setStudentTemplatesExpanded(!studentTemplatesExpanded)} aria-label="展开/收起学生模板">
+                  {studentTemplatesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+              </Stack>
+              <Collapse in={studentTemplatesExpanded}>
+                {studentTemplates.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    暂无常用点评，输入内容后点击"保存为常用点评"即可添加
+                  </Typography>
+                ) : (
+                  <Stack spacing={1}>
+                    {studentTemplates.map(t => (
+                      <Card key={t.id} variant="outlined">
+                        <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                            <Box
+                              sx={{ flexGrow: 1, cursor: 'pointer', minHeight: 32, display: 'flex', alignItems: 'center' }}
+                              onClick={() => insertStudentTemplate(t)}
+                            >
+                              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {t.content}
+                              </Typography>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              onClick={() => deleteStudentTemplate(t.id)}
+                              aria-label="删除此常用点评"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    <Typography variant="caption" color="text.secondary">
+                      支持变量：{'{学生姓名}'} {'{科目}'} {'{日期}'}，插入时自动替换
+                    </Typography>
+                  </Stack>
+                )}
+              </Collapse>
             </Box>
           )}
         </Box>
-      </Stack>
-
-      <Divider sx={{ my: 2 }} />
-
-      {/* ========== 快捷回复库 ========== */}
-      <Box sx={{ mb: 2 }}>
-        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>快捷回复</Typography>
-          <Stack direction="row" spacing={1}>
-            <IconButton size="small" onClick={() => setAddQuickReplyOpen(true)} aria-label="添加快捷回复">
-              <AddIcon fontSize="small" />
-            </IconButton>
-            <IconButton size="small" onClick={() => setQuickRepliesExpanded(!quickRepliesExpanded)} aria-label="展开/收起快捷回复">
-              {quickRepliesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-            </IconButton>
-          </Stack>
-        </Stack>
-        <Collapse in={quickRepliesExpanded}>
-          {quickReplies.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">暂无快捷回复，点击 + 添加</Typography>
-          ) : (
-            <Stack spacing={1.5}>
-              {quickReplyCategories.map(cat => (
-                <Box key={cat}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    {cat}
-                  </Typography>
-                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true }}>
-                    {quickReplies.filter(r => r.category === cat).map(r => {
-                      const short = r.content.substring(0, 20) + (r.content.length > 20 ? '...' : '');
-                      return (
-                        <Chip
-                          key={r.id}
-                          label={short}
-                          size="small"
-                          onClick={() => insertQuickReply(r.content)}
-                          onDelete={() => deleteQuickReply(r.id)}
-                          deleteIcon={<DeleteIcon />}
-                          sx={{ cursor: 'pointer' }}
-                          title={r.content}
-                        />
-                      );
-                    })}
-                  </Stack>
-                </Box>
-              ))}
-            </Stack>
-          )}
-        </Collapse>
       </Box>
-
-      {/* ========== 学生常用模板 ========== */}
-      {currentStudent && (
-        <Box sx={{ mb: 2 }}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>{currentStudent.name}的常用点评</Typography>
-            <IconButton size="small" onClick={() => setStudentTemplatesExpanded(!studentTemplatesExpanded)} aria-label="展开/收起学生模板">
-              {studentTemplatesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-            </IconButton>
-          </Stack>
-          <Collapse in={studentTemplatesExpanded}>
-            {studentTemplates.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                暂无常用点评，输入内容后点击"保存为常用点评"即可添加
-              </Typography>
-            ) : (
-              <Stack spacing={1}>
-                {studentTemplates.map(t => (
-                  <Card key={t.id} variant="outlined">
-                    <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-                        <Box
-                          sx={{ flexGrow: 1, cursor: 'pointer', minHeight: 32, display: 'flex', alignItems: 'center' }}
-                          onClick={() => insertStudentTemplate(t)}
-                        >
-                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                            {t.content}
-                          </Typography>
-                        </Box>
-                        <IconButton
-                          size="small"
-                          onClick={() => deleteStudentTemplate(t.id)}
-                          aria-label="删除此常用点评"
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ))}
-                <Typography variant="caption" color="text.secondary">
-                  支持变量：{'{学生姓名}'} {'{科目}'} {'{日期}'}，插入时自动替换
-                </Typography>
-              </Stack>
-            )}
-          </Collapse>
-        </Box>
-      )}
-
-      <Divider sx={{ my: 2 }} />
-
-      {/* ========== 文本框区域 ========== */}
-      <Box sx={{ mb: 2 }}>
-        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle2" color="text.secondary">课堂内容（可直接输入或编辑）</Typography>
-          <Stack direction="row" spacing={1}>
-            {currentStudent && (
-              <Button size="small" startIcon={<BookmarkIcon />} onClick={saveAsTemplate} sx={{ textTransform: 'none' }}>
-                保存为常用点评
-              </Button>
-            )}
-            <Button size="small" color="error" onClick={() => recorder.clearTranscript()} sx={{ textTransform: 'none' }}>
-              清空
-            </Button>
-          </Stack>
-        </Stack>
-
-        {/* 小组模式：姓名快速插入按钮 */}
-        {currentGroup && currentGroup.length >= 2 && (
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mb: 1, useFlexGap: true }}>
-            {currentGroup.map(id => {
-              const s = store.getStudentById(id);
-              return s ? (
-                <Chip
-                  key={id}
-                  label={`@${s.name}`}
-                  size="small"
-                  variant="outlined"
-                  onClick={() => insertStudentName(s.name)}
-                />
-              ) : null;
-            })}
-            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
-              点击插入姓名标记，帮助AI区分
-            </Typography>
-          </Stack>
-        )}
-
-        <TextField
-          inputRef={textareaRef}
-          multiline
-          minRows={6}
-          fullWidth
-          value={recorder.displayText}
-          onChange={(e) => recorder.handleTextChange(e.target.value)}
-          placeholder={'请在此输入本节课的课堂内容，例如：\n• 今天复习了二次函数\n• 学生掌握了配方法\n• 作业是练习册第15页\n\n建议使用电脑端浏览器操作，输入更方便…'}
-          inputProps={{ 'aria-label': '课堂内容' }}
-        />
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-          字数：{wordCount}
-        </Typography>
-      </Box>
-
-      {/* ========== 生成反馈按钮 ========== */}
-      <Stack spacing={1} sx={{ mb: 2 }}>
-        <Button
-          variant="contained"
-          size="medium"
-          fullWidth
-          startIcon={generating ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
-          onClick={generateFeedback}
-          disabled={generating}
-          sx={{ textTransform: 'none', borderRadius: 16 }}
-        >
-          {generating ? '生成中...' : '生成反馈'}
-        </Button>
-        {currentStudent && (
-          <Button
-            variant="outlined"
-            startIcon={<HistoryIcon />}
-            onClick={() => navigate('/history')}
-            sx={{ textTransform: 'none', borderRadius: 20 }}
-          >
-            查看历史反馈
-          </Button>
-        )}
-      </Stack>
 
       {/* ========== 科目切换器（Drawer） ========== */}
       <Drawer
