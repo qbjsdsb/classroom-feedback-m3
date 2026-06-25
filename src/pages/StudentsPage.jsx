@@ -170,8 +170,8 @@ export default function StudentsPage() {
   return (
     <Box sx={{ position: 'relative', pb: isGroupMode && selectedStudentIds.size > 0 ? 10 : 2 }}>
       {/* 标题栏 + 小组模式切换 */}
-      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Stack direction="row" sx={{ mb: 2.5, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="h6" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
           👥 学生管理
         </Typography>
         <Button
@@ -180,6 +180,7 @@ export default function StudentsPage() {
           size="small"
           startIcon={isGroupMode ? <GroupIcon /> : <PersonIcon />}
           onClick={toggleGroupMode}
+          sx={{ textTransform: 'none', borderRadius: 20 }}
         >
           {isGroupMode ? '小组模式' : '单人模式'}
         </Button>
@@ -187,9 +188,9 @@ export default function StudentsPage() {
 
       {/* 快速开始引导 */}
       {!hasSetup && tips.length > 0 ? (
-        <Card variant="outlined" sx={{ mb: 2, bgcolor: 'background.paper' }}>
+        <Card variant="outlined" sx={{ mb: 2.5, bgcolor: 'background.paper', borderColor: 'primary.light' }}>
           <CardContent>
-            <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>快速开始</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>快速开始</Typography>
             <Box component="ul" sx={{ m: 0, pl: 2 }}>
               {tips.map((tip, i) => (
                 <Box component="li" key={i} sx={{ mb: 0.5, color: 'text.secondary' }}>{tip}</Box>
@@ -219,7 +220,7 @@ export default function StudentsPage() {
           }}
         />
         {allGrades.length > 0 ? (
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl size="small" sx={{ minWidth: 110 }}>
             <InputLabel id="grade-filter-label">年级</InputLabel>
             <Select
               labelId="grade-filter-label"
@@ -233,7 +234,7 @@ export default function StudentsPage() {
             </Select>
           </FormControl>
         ) : null}
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap', minWidth: 36, textAlign: 'right' }}>
           {students.length} 名
         </Typography>
       </Stack>
@@ -244,7 +245,7 @@ export default function StudentsPage() {
           <CardContent>
             <Typography variant="h4" sx={{ mb: 1 }}>📝</Typography>
             <Typography color="text.secondary" sx={{ mb: 2 }}>还没有添加学生</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/students/new')}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/students/new')} sx={{ textTransform: 'none', borderRadius: 20 }}>
               添加第一名学生
             </Button>
           </CardContent>
@@ -334,7 +335,7 @@ export default function StudentsPage() {
         color="primary"
         aria-label="添加学生"
         onClick={() => navigate('/students/new')}
-        sx={{ position: 'fixed', bottom: 80, right: 16 }}
+        sx={{ position: 'fixed', bottom: 80, right: 16, boxShadow: 4 }}
       >
         <AddIcon />
       </Fab>
@@ -342,15 +343,15 @@ export default function StudentsPage() {
       {/* 小组模式底部操作栏 */}
       {isGroupMode && selectedStudentIds.size > 0 ? (
         <Paper
-          elevation={3}
+          elevation={4}
           sx={{
             position: 'fixed', bottom: 56, left: 0, right: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            px: 2, py: 1, zIndex: 1100,
+            px: 2, py: 1.5, zIndex: 1100, borderTop: 1, borderColor: 'divider',
           }}
         >
-          <Typography>已选择 {selectedStudentIds.size} 人</Typography>
-          <Button variant="contained" color="primary" onClick={confirmGroup}>确认选择</Button>
+          <Typography variant="body2">已选择 <b>{selectedStudentIds.size}</b> 人</Typography>
+          <Button variant="contained" color="primary" onClick={confirmGroup} sx={{ textTransform: 'none', borderRadius: 20 }}>确认选择</Button>
         </Paper>
       ) : null}
 

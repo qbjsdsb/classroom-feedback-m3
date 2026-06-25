@@ -349,12 +349,15 @@ ${feedbackSummary}
   return (
     <Box>
       {/* ========== 顶部标题栏 ========== */}
-      <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 2 }}>
         <IconButton onClick={() => navigate('/record')} aria-label="返回课堂录音">
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h6" sx={{ flexGrow: 1 }} noWrap>
+        <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }} noWrap>
           📋 {currentStudent.name} 的历史反馈
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+          共 {allHistory.length} 条
         </Typography>
       </Stack>
 
@@ -407,7 +410,7 @@ ${feedbackSummary}
             startIcon={generatingSummary ? <CircularProgress size={18} color="inherit" /> : <SummarizeIcon />}
             onClick={generateSummary}
             disabled={generatingSummary}
-            sx={{ textTransform: 'none' }}
+            sx={{ textTransform: 'none', borderRadius: 20, py: 1 }}
           >
             {generatingSummary ? '生成中...' : '📊 生成学习总结'}
           </Button>
@@ -416,7 +419,7 @@ ${feedbackSummary}
               variant="outlined"
               startIcon={<FileDownloadIcon />}
               onClick={exportAll}
-              sx={{ flex: 1, textTransform: 'none' }}
+              sx={{ flex: 1, textTransform: 'none', borderRadius: 20 }}
             >
               导出全部
             </Button>
@@ -424,7 +427,7 @@ ${feedbackSummary}
               variant="outlined"
               startIcon={<FileDownloadIcon />}
               onClick={exportRecent}
-              sx={{ flex: 1, textTransform: 'none' }}
+              sx={{ flex: 1, textTransform: 'none', borderRadius: 20 }}
             >
               导出近期
             </Button>
@@ -537,14 +540,14 @@ ${feedbackSummary}
       <Dialog open={!!detailItem} onClose={closeDetail} fullWidth maxWidth="sm">
         {detailItem && (
           <>
-            <DialogTitle>
-              {(() => {
-                const subject = subjectMap[detailItem.subjectId];
-                const date = new Date(detailItem.createdAt);
-                const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-                return subject ? subject.name : '未分类';
-              })()}
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 'normal' }}>
+            <DialogTitle sx={{ pb: 0.5 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {(() => {
+                  const subject = subjectMap[detailItem.subjectId];
+                  return subject ? `📚 ${subject.name}` : '📝 未分类';
+                })()}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 'normal', mt: 0.25 }}>
                 {(() => {
                   const date = new Date(detailItem.createdAt);
                   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;

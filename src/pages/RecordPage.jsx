@@ -424,34 +424,36 @@ export default function RecordPage() {
   return (
     <Box>
       {/* ========== 顶部标题栏 ========== */}
-      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center' }}>
         <IconButton onClick={() => navigate('/subject-select')} aria-label="返回科目选择">
           <ArrowBackIcon />
         </IconButton>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="h6">{headerInfo.text}</Typography>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
-            <Button
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }} noWrap>{headerInfo.text}</Typography>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mt: 0.25, flexWrap: 'wrap', gap: 0.5, useFlexGap: true }}>
+            <Chip
               size="small"
+              label={currentSubject ? `📚 ${currentSubject.name}` : '📚 未选择科目'}
               onClick={() => setSubjectSwitcherOpen(true)}
+              onDelete={() => setSubjectSwitcherOpen(true)}
+              deleteIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}
+              variant="outlined"
               sx={{
                 color: currentSubject?.color || 'text.secondary',
+                borderColor: currentSubject?.color ? `${currentSubject.color}66` : 'divider',
+                bgcolor: currentSubject?.color ? `${currentSubject.color}0F` : 'transparent',
+                height: 24,
                 fontWeight: 500,
-                textTransform: 'none',
-                minWidth: 'auto',
-                py: 0,
               }}
-              endIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}
-            >
-              📚 {currentSubject ? currentSubject.name : '未选择科目'}
-            </Button>
-            <Button
+            />
+            <Chip
               size="small"
+              label={selectedPromptTemplateName ? `📋 ${selectedPromptTemplateName}` : '📋 模板'}
               onClick={() => setPromptPickerOpen(true)}
-              sx={{ fontSize: '0.8rem', textTransform: 'none', minWidth: 'auto' }}
-            >
-              {selectedPromptTemplateName ? `📋 ${selectedPromptTemplateName}` : '📋 选择模板'}
-            </Button>
+              variant="outlined"
+              color={selectedPromptTemplateName ? 'primary' : 'default'}
+              sx={{ height: 24, fontWeight: 500 }}
+            />
           </Stack>
         </Box>
         <IconButton onClick={() => navigate('/settings')} aria-label="打开设置">
@@ -715,16 +717,16 @@ export default function RecordPage() {
           startIcon={generating ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
           onClick={generateFeedback}
           disabled={generating}
-          sx={{ textTransform: 'none' }}
+          sx={{ textTransform: 'none', borderRadius: 28, py: 1.2, fontSize: '1rem' }}
         >
-          {generating ? '生成中...' : '生成反馈'}
+          {generating ? '生成中...' : '✨ 生成反馈'}
         </Button>
         {currentStudent && (
           <Button
             variant="outlined"
             startIcon={<HistoryIcon />}
             onClick={() => navigate('/history')}
-            sx={{ textTransform: 'none' }}
+            sx={{ textTransform: 'none', borderRadius: 20 }}
           >
             查看历史反馈
           </Button>

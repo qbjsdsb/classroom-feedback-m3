@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Typography, IconButton, Button, TextField, MenuItem, Select, InputLabel,
-  FormControl, Switch, FormControlLabel, Checkbox, Stack, Paper
+  FormControl, Switch, FormControlLabel, Checkbox, Stack, Paper, Card, CardContent, Divider
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
@@ -109,96 +109,105 @@ export default function StudentFormPage() {
   return (
     <Box>
       {/* 顶部标题栏 */}
-      <Stack direction="row" spacing={1} sx={{ mb: 2, alignItems: 'center' }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 2.5, alignItems: 'center' }}>
         <IconButton onClick={() => navigate('/students')} aria-label="返回学生管理">
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h5">
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
           {isEdit ? '✏️ 编辑学生' : '➕ 添加学生'}
         </Typography>
       </Stack>
 
       {/* 表单 */}
       <Stack spacing={2.5}>
-        {/* 姓名 */}
-        <TextField
-          label="学生姓名 *"
-          placeholder="请输入学生姓名…"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          fullWidth
-          autoFocus
-        />
-
-        {/* 年级 */}
-        <FormControl fullWidth>
-          <InputLabel id="grade-label">年级</InputLabel>
-          <Select
-            labelId="grade-label"
-            label="年级"
-            value={grade}
-            onChange={(e) => setGrade(e.target.value)}
-          >
-            <MenuItem value="">未选择</MenuItem>
-            {GRADES.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
-          </Select>
-        </FormControl>
-
-        {/* 试听学生 */}
-        <Box>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={isTrial}
-                onChange={(e) => setIsTrial(e.target.checked)}
+        {/* 基本信息卡 */}
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={2.5}>
+              <TextField
+                label="学生姓名 *"
+                placeholder="请输入学生姓名…"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                fullWidth
+                autoFocus
               />
-            }
-            label="标记为试听学生"
-          />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            标记后，生成的反馈标题会显示"试听"字样
-          </Typography>
-        </Box>
 
-        {/* 选修科目 */}
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>选修科目</Typography>
-          {allSubjects.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">暂无科目，请在设置中添加</Typography>
-          ) : (
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-              {allSubjects.map(s => {
-                const checked = selectedSubjects.has(s.id);
-                return (
-                  <Paper
-                    key={s.id}
-                    variant="outlined"
-                    onClick={() => toggleSubject(s.id)}
-                    sx={{
-                      display: 'flex', alignItems: 'center', gap: 1,
-                      px: 1.5, py: 0.75, cursor: 'pointer',
-                      borderColor: checked ? s.color : 'divider',
-                      borderWidth: checked ? 2 : 1,
-                      bgcolor: checked ? `${s.color}14` : 'background.paper',
-                      '&:hover': { borderColor: s.color },
-                    }}
-                  >
-                    <Checkbox
-                      checked={checked}
-                      size="small"
-                      sx={{
-                        color: s.color,
-                        '&.Mui-checked': { color: s.color },
-                        p: 0.5,
-                      }}
+              <FormControl fullWidth>
+                <InputLabel id="grade-label">年级</InputLabel>
+                <Select
+                  labelId="grade-label"
+                  label="年级"
+                  value={grade}
+                  onChange={(e) => setGrade(e.target.value)}
+                >
+                  <MenuItem value="">未选择</MenuItem>
+                  {GRADES.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+                </Select>
+              </FormControl>
+
+              <Divider />
+
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={isTrial}
+                      onChange={(e) => setIsTrial(e.target.checked)}
                     />
-                    <Typography sx={{ color: checked ? s.color : 'text.primary' }}>{s.name}</Typography>
-                  </Paper>
-                );
-              })}
+                  }
+                  label="标记为试听学生"
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, pl: 4 }}>
+                  标记后，生成的反馈标题会显示"试听"字样
+                </Typography>
+              </Box>
             </Stack>
-          )}
-        </Box>
+          </CardContent>
+        </Card>
+
+        {/* 选修科目卡 */}
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>选修科目</Typography>
+            {allSubjects.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">暂无科目，请在设置中添加</Typography>
+            ) : (
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {allSubjects.map(s => {
+                  const checked = selectedSubjects.has(s.id);
+                  return (
+                    <Paper
+                      key={s.id}
+                      variant="outlined"
+                      onClick={() => toggleSubject(s.id)}
+                      sx={{
+                        display: 'flex', alignItems: 'center', gap: 1,
+                        px: 1.5, py: 0.75, cursor: 'pointer',
+                        borderColor: checked ? s.color : 'divider',
+                        borderWidth: checked ? 2 : 1,
+                        bgcolor: checked ? `${s.color}14` : 'background.paper',
+                        '&:hover': { borderColor: s.color },
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        size="small"
+                        sx={{
+                          color: s.color,
+                          '&.Mui-checked': { color: s.color },
+                          p: 0.5,
+                        }}
+                      />
+                      <Typography sx={{ color: checked ? s.color : 'text.primary' }}>{s.name}</Typography>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
 
         {/* 保存按钮 */}
         <Button
@@ -208,6 +217,7 @@ export default function StudentFormPage() {
           startIcon={<SaveIcon />}
           onClick={handleSave}
           fullWidth
+          sx={{ textTransform: 'none', borderRadius: 28 }}
         >
           {isEdit ? '保存修改' : '添加学生'}
         </Button>
@@ -221,6 +231,7 @@ export default function StudentFormPage() {
             startIcon={<DeleteIcon />}
             onClick={handleDelete}
             fullWidth
+            sx={{ textTransform: 'none', borderRadius: 28 }}
           >
             删除学生
           </Button>

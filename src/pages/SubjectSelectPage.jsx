@@ -76,12 +76,12 @@ export default function SubjectSelectPage() {
   return (
     <Box>
       {/* 顶部标题栏 */}
-      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 2.5, alignItems: 'center' }}>
         <IconButton onClick={() => navigate('/students')} aria-label="返回学生管理">
           <ArrowBackIcon />
         </IconButton>
         <Box>
-          <Typography variant="h5">{title}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>{title}</Typography>
           <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
         </Box>
       </Stack>
@@ -92,11 +92,11 @@ export default function SubjectSelectPage() {
           <CardContent>
             <Typography variant="h4" sx={{ mb: 1 }}>📚</Typography>
             <Typography color="text.secondary" sx={{ mb: 2 }}>暂无科目</Typography>
-            <Button variant="contained" onClick={() => navigate('/settings')}>前往设置添加科目</Button>
+            <Button variant="contained" onClick={() => navigate('/settings')} sx={{ textTransform: 'none', borderRadius: 20 }}>前往设置添加科目</Button>
           </CardContent>
         </Card>
       ) : (
-        <Grid container spacing={2} sx={{ mt: 1 }}>
+        <Grid container spacing={2}>
           {displaySubjects.map(s => (
             <Grid item xs={6} sm={4} md={3} key={s.id}>
               <Card
@@ -104,27 +104,29 @@ export default function SubjectSelectPage() {
                 sx={{
                   borderColor: s.color,
                   borderWidth: 1,
-                  '&:hover': { boxShadow: 3, borderColor: s.color },
+                  borderRadius: 3,
+                  transition: 'all 0.2s',
+                  '&:hover': { boxShadow: 4, borderColor: s.color, transform: 'translateY(-2px)' },
                 }}
               >
                 <CardActionArea
                   onClick={() => selectSubject(s.id)}
-                  sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                  sx={{ p: 2.5, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                 >
                   <Avatar
                     sx={{
-                      bgcolor: hexToRgba(s.color, 0.12),
+                      bgcolor: hexToRgba(s.color, 0.14),
                       color: s.color,
                       width: 56,
                       height: 56,
-                      mb: 1,
+                      mb: 1.5,
                       fontSize: 24,
-                      fontWeight: 500,
+                      fontWeight: 600,
                     }}
                   >
                     {s.name.charAt(0)}
                   </Avatar>
-                  <Typography sx={{ color: s.color, fontWeight: 500 }}>{s.name}</Typography>
+                  <Typography sx={{ color: s.color, fontWeight: 600 }}>{s.name}</Typography>
                 </CardActionArea>
               </Card>
             </Grid>
