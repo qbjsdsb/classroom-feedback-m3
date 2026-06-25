@@ -23,7 +23,10 @@ export default defineConfig({
         categories: ['education', 'productivity']
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // 扩展 globPatterns 包含 json/txt/onnx/wasm：缓存本地 whisper-tiny 模型文件
+        // 模型文件位于 public/vendor/whisper-tiny/（含 config.json/tokenizer.json/onnx 等）
+        // onnx 文件最大约 30MB，maximumFileSizeToCacheInBytes 设为 50MB 以容纳
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,txt,onnx,wasm}'],
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024
       }
     })
