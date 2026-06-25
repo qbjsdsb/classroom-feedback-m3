@@ -29,6 +29,7 @@ import { useSession } from '../store/SessionContext';
 import { UI } from '../utils/ui';
 import AiService from '../services/aiService';
 import { matchStudentByName, truncateTranscriptForStore } from '../utils/feedback';
+import { adaptColorForTheme, hexToRgba } from '../utils/color';
 import FeedbackResultDialog from '../components/FeedbackResultDialog';
 
 /**
@@ -441,9 +442,18 @@ export default function RecordPage() {
               deleteIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}
               variant="outlined"
               sx={{
-                color: currentSubject?.color || 'text.secondary',
-                borderColor: currentSubject?.color ? `${currentSubject.color}66` : 'divider',
-                bgcolor: currentSubject?.color ? `${currentSubject.color}0F` : 'transparent',
+                color: (() => {
+                  const c = currentSubject?.color;
+                  return c ? adaptColorForTheme(c, isDark) : 'text.secondary';
+                })(),
+                borderColor: (() => {
+                  const c = currentSubject?.color;
+                  return c ? hexToRgba(adaptColorForTheme(c, isDark), 0.4) : 'divider';
+                })(),
+                bgcolor: (() => {
+                  const c = currentSubject?.color;
+                  return c ? hexToRgba(adaptColorForTheme(c, isDark), 0.06) : 'transparent';
+                })(),
                 height: 28,
                 fontWeight: 500,
               }}

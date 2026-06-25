@@ -24,9 +24,10 @@ export function createAppTheme(mode) {
         main: isLight ? '#7D5260' : '#EFB8C8',
       },
       background: {
-        // M3 surface 色阶：background.default = surface，paper = surface-container-low
+        // M3 surface 色阶分层：暗色模式下 default(surface) 与 paper(surface-container-low) 拉开层级，
+        // 卡片与背景区分更清晰（避免暗色模式过于扁平）
         default: isLight ? '#FEF7FF' : '#141218',
-        paper: isLight ? '#FEF7FF' : '#1D1B20',
+        paper: isLight ? '#FEF7FF' : '#211F26',
       },
       text: {
         primary: isLight ? '#1C1B1F' : '#E6E1E5',
@@ -54,11 +55,13 @@ export function createAppTheme(mode) {
       // M3 Type Scale：headline 用 medium 字重（不用 semibold，保持克制纯净）
       h4: { fontWeight: 400, letterSpacing: 0 },
       h5: { fontWeight: 500, letterSpacing: 0 },
-      h6: { fontWeight: 500, letterSpacing: 0.15 },
-      subtitle1: { fontWeight: 500, letterSpacing: 0.15 },
+      // 标题字间距：中文用 0.1 折中（纯中文 0 偏挤，0.15 偏松，混合标题仍可读）
+      h6: { fontWeight: 500, letterSpacing: 0.1 },
+      subtitle1: { fontWeight: 500, letterSpacing: 0.1 },
       subtitle2: { fontWeight: 500, letterSpacing: 0.1 },
-      body1: { letterSpacing: 0.15 },
-      body2: { letterSpacing: 0.25 },
+      // 中文行高优化：默认 1.43 在中文下偏挤，提到 1.6 提升可读性
+      body1: { letterSpacing: 0.15, lineHeight: 1.6 },
+      body2: { letterSpacing: 0.25, lineHeight: 1.6 },
       button: { textTransform: 'none', fontWeight: 500, letterSpacing: 0.1 },
       caption: { letterSpacing: 0.4 },
       overline: { letterSpacing: 0.5 },
@@ -73,6 +76,8 @@ export function createAppTheme(mode) {
             // M3 状态层：hover 时叠加 8% primary
             transition: 'background-color 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1)',
           }),
+          // Button 图标对齐微调：startIcon 右内边距收紧，视觉与文字基线更平衡
+          startIcon: { marginRight: -4, marginLeft: 0 },
         },
       },
       MuiCard: {

@@ -65,3 +65,17 @@ body,
     background: rgba(103, 80, 164, 0.35);
   }
 }
+
+/* M3 focus ring：仅键盘导航可见（:focus-visible），鼠标点击不触发，无障碍且不干扰视觉 */
+/* 用 2px primary 色外描边 + 2px offset，遵循 M3 accessibility 规范 */
+:focus-visible {
+  outline: 2px solid #6750A4;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :focus-visible {
+    outline-color: #D0BCFF;
+  }
+}

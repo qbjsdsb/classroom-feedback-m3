@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Stack, Typography, Button, IconButton, Chip, Card, CardContent,
   Divider, CircularProgress, Dialog, DialogTitle, DialogContent,
-  DialogActions, ToggleButtonGroup, ToggleButton,
+  DialogActions, ToggleButtonGroup, ToggleButton, useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -26,6 +26,7 @@ import {
   generateFeedbackTitle, getModuleIcon,
   copyToClipboard, buildFeedbackText,
 } from '../utils/feedback';
+import { adaptColorForTheme } from '../utils/color';
 
 const DATE_FILTERS = [
   { value: 'all', label: '全部' },
@@ -67,6 +68,8 @@ export default function HistoryPage() {
   const { store, Storage, ready, refresh, refreshCounter } = useData();
   const session = useSession();
   const { currentStudent } = session;
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
 
   // ========== 筛选 state ==========
   const [subjectFilter, setSubjectFilter] = useState(null);
@@ -381,7 +384,7 @@ ${feedbackSummary}
                 color={subjectFilter === s.id ? 'primary' : 'default'}
                 variant={subjectFilter === s.id ? 'filled' : 'outlined'}
                 onClick={() => setSubjectFilter(s.id)}
-                sx={{ borderColor: s.color }}
+                sx={{ borderColor: adaptColorForTheme(s.color, isDark) }}
               />
             ))}
           </Stack>
@@ -476,15 +479,15 @@ ${feedbackSummary}
                       variant="outlined"
                       sx={{
                         borderLeft: 3,
-                        borderColor: subject?.color || 'primary.main',
-                        // M3 状态层：hover 时叠加 6% primary + 轻微抬升
-                        transition: 'box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s cubic-bezier(0.2, 0, 0, 1)',
-                        '&:hover': { boxShadow: 1, bgcolor: 'action.hover' },
+                        borderColor: subject ? adaptColorForTheme(subject.color, isDark) : 'primary.main',
+                        // 项16：Card hover 改克制（borderColor 强调 + 轻微上移）
+                        transition: 'border-color 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
+                        '&:hover': { transform: 'translateY(-1px)' },
                       }}
                     >
                       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: subject?.color || 'text.secondary', fontWeight: 500 }}>
+                          <Typography variant="caption" sx={{ color: subject ? adaptColorForTheme(subject.color, isDark) : 'text.secondary', fontWeight: 500 }}>
                             {subject ? subject.name : '未分类'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">{dateStr}</Typography>

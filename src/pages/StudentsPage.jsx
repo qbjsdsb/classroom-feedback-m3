@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, IconButton, Button, TextField, MenuItem, Select, InputLabel,
   FormControl, Card, CardContent, Avatar, Chip, Fab, Checkbox, Menu, ListItemIcon,
-  ListItemText, MenuList, Paper, Stack, Grid
+  ListItemText, MenuList, Paper, Stack, Grid, useTheme
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AddIcon from '@mui/icons-material/Add';
@@ -20,6 +20,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useData } from '../store/DataContext';
 import { useSession } from '../store/SessionContext';
 import { UI } from '../utils/ui';
+import { hexToRgba, adaptColorForTheme } from '../utils/color';
 
 // 全部年级按顺序
 const GRADE_ORDER = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '初一', '初二', '初三', '高一', '高二', '高三'];
@@ -45,19 +46,12 @@ function getAvatarGradient(name) {
   return gradients[Math.abs(hash) % gradients.length];
 }
 
-// hex 颜色 + 透明度（用于 Chip 背景）
-function hexToRgba(hex, alpha) {
-  if (!hex || !hex.startsWith('#')) return hex;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 export default function StudentsPage() {
   const { ready, store, Storage, refresh, refreshCounter } = useData();
   const { setCurrentStudent, setCurrentGroup } = useSession();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState('');
@@ -267,8 +261,9 @@ export default function StudentsPage() {
                     borderColor: isGroupMode && isSelected ? 'primary.main' : 'divider',
                     borderWidth: isGroupMode && isSelected ? 2 : 1,
                     bgcolor: isGroupMode && isSelected ? 'action.selected' : 'background.paper',
-                    // M3 状态层：hover 叠加 6% primary + 轻微抬升
-                    '&:hover': { boxShadow: 1, bgcolor: 'action.hover' },
+                    // 项16：Card hover 改克制（borderColor 强调 + 轻微上移，不再用 boxShadow/bgcolor 抬升）
+                    transition: 'border-color 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
+                    '&:hover': { borderColor: 'primary.main', transform: 'translateY(-1px)' },
                   }}
                 >
                   <CardContent sx={{ display: 'flex', alignItems: 'center', py: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -306,8 +301,8 @@ export default function StudentsPage() {
                               sx={{
                                 height: 20,
                                 fontSize: 12,
-                                bgcolor: hexToRgba(s.color, 0.12),
-                                color: s.color,
+                                bgcolor: hexToRgba(adaptColorForTheme(s.color, isDark), 0.12),
+                                color: adaptColorForTheme(s.color, isDark),
                                 border: 'none',
                               }}
                             />

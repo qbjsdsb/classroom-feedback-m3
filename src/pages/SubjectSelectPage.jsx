@@ -6,25 +6,19 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, IconButton, Grid, Card, CardActionArea, CardContent,
-  Avatar, Stack, Button
+  Avatar, Stack, Button, useTheme
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useData } from '../store/DataContext';
 import { useSession } from '../store/SessionContext';
-
-// hex 颜色 + 透明度
-function hexToRgba(hex, alpha) {
-  if (!hex || !hex.startsWith('#')) return hex;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+import { hexToRgba, adaptColorForTheme } from '../utils/color';
 
 export default function SubjectSelectPage() {
   const navigate = useNavigate();
   const { ready, store, refreshCounter } = useData();
   const { currentStudent, currentGroup, setCurrentSubject } = useSession();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
 
   // 计算标题与副标题
   const { title, subtitle } = useMemo(() => {
@@ -96,16 +90,19 @@ export default function SubjectSelectPage() {
         </Card>
       ) : (
         <Grid container spacing={2}>
-          {displaySubjects.map(s => (
+          {displaySubjects.map(s => {
+            const ac = adaptColorForTheme(s.color, isDark);
+            return (
             <Grid item xs={6} sm={4} md={3} key={s.id}>
               <Card
                 variant="outlined"
                 sx={{
-                  borderColor: s.color,
+                  borderColor: ac,
                   borderWidth: 1,
                   borderRadius: 12,
-                  transition: 'all 0.2s',
-                  '&:hover': { boxShadow: 4, borderColor: s.color, transform: 'translateY(-2px)' },
+                  // 项16：Card hover 改克制（borderColor 强调 + 轻微上移，不再用 boxShadow 抬升）
+                  transition: 'border-color 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1)',
+                  '&:hover': { borderColor: 'primary.main', transform: 'translateY(-1px)' },
                 }}
               >
                 <CardActionArea
@@ -114,8 +111,8 @@ export default function SubjectSelectPage() {
                 >
                   <Avatar
                     sx={{
-                      bgcolor: hexToRgba(s.color, 0.14),
-                      color: s.color,
+                      bgcolor: hexToRgba(ac, 0.14),
+                      color: ac,
                       width: 48,
                       height: 48,
                       mb: 1,
@@ -125,11 +122,12 @@ export default function SubjectSelectPage() {
                   >
                     {s.name.charAt(0)}
                   </Avatar>
-                  <Typography sx={{ color: s.color, fontWeight: 500 }}>{s.name}</Typography>
+                  <Typography sx={{ color: ac, fontWeight: 500 }}>{s.name}</Typography>
                 </CardActionArea>
               </Card>
             </Grid>
-          ))}
+            );
+          })}
         </Grid>
       )}
     </Box>
