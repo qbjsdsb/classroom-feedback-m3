@@ -76,7 +76,7 @@ export default function SubjectSelectPage() {
   return (
     <Box>
       {/* 顶部标题栏 */}
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
         <IconButton onClick={() => navigate('/students')} aria-label="返回学生管理">
           <ArrowBackIcon />
         </IconButton>

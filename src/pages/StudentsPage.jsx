@@ -170,7 +170,7 @@ export default function StudentsPage() {
   return (
     <Box sx={{ position: 'relative', pb: isGroupMode && selectedStudentIds.size > 0 ? 10 : 2 }}>
       {/* 标题栏 + 小组模式切换 */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           👥 学生管理
         </Typography>
@@ -200,20 +200,22 @@ export default function StudentsPage() {
       ) : null}
 
       {/* 搜索栏 */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 2, alignItems: 'center' }}>
         <TextField
           placeholder="搜索学生姓名…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           size="small"
           fullWidth
-          InputProps={{
-            startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />,
-            endAdornment: searchQuery ? (
-              <IconButton size="small" onClick={clearSearch} aria-label="清除搜索">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            ) : null,
+          slotProps={{
+            input: {
+              startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />,
+              endAdornment: searchQuery ? (
+                <IconButton size="small" onClick={clearSearch} aria-label="清除搜索">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              ) : null,
+            },
           }}
         />
         {allGrades.length > 0 ? (
@@ -282,7 +284,7 @@ export default function StudentsPage() {
                   </Avatar>
                   {/* 信息 */}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.5, flexWrap: 'wrap' }}>
+                    <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
                       <Typography component="span" sx={{ fontWeight: 500 }}>{student.name}</Typography>
                       {student.isTrial ? (
                         <Chip label="试听" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: 12 }} />
