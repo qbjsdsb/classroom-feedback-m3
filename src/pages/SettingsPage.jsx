@@ -578,7 +578,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<KeyIcon color="primary" />}
             title="API Key"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             <Stack spacing={2}>
@@ -639,7 +639,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<MicIcon color="primary" />}
             title="语音识别"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             <Stack spacing={2}>
@@ -656,8 +656,8 @@ export default function SettingsPage() {
                 fullWidth
                 size="small"
               >
-                <ToggleButton value="browser">🌐 浏览器内置</ToggleButton>
-                <ToggleButton value="whisper">🤖 本地AI</ToggleButton>
+                <ToggleButton value="browser">浏览器内置</ToggleButton>
+                <ToggleButton value="whisper">本地AI</ToggleButton>
               </ToggleButtonGroup>
               {speechProvider === 'browser' && (
                 <Typography variant="body2" color="text.secondary">
@@ -666,8 +666,8 @@ export default function SettingsPage() {
               )}
               {speechProvider === 'whisper' && (
                 <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-                    🤖 本地AI语音识别（基于 OpenAI Whisper 模型）
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                    本地AI语音识别（基于 OpenAI Whisper 模型）
                   </Typography>
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1.5 }}>
                     ✅ 完全离线运行，无需联网，隐私安全<br />
@@ -696,7 +696,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<StyleIcon color="primary" />}
             title="反馈风格"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             <Stack spacing={2.5}>
@@ -826,7 +826,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<SchoolIcon color="primary" />}
             title="科目管理"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
             action={
               <Button size="small" startIcon={<AddIcon />} onClick={handleAddSubject} sx={{ textTransform: 'none' }}>添加</Button>
             }
@@ -863,7 +863,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<AutoAwesomeIcon color="primary" />}
             title="Prompt 模板库"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
             action={
               <Button size="small" startIcon={<AddIcon />} onClick={openNewTemplateForm} sx={{ textTransform: 'none' }}>新建</Button>
             }
@@ -879,7 +879,7 @@ export default function SettingsPage() {
                 {promptTemplates.map(t => (
                   <Paper key={t.id} variant="outlined" sx={{ p: 1.5 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, flexGrow: 1 }}>{t.name}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, flexGrow: 1 }}>{t.name}</Typography>
                       {t.isDefault && <Chip label="预置" size="small" color="primary" variant="outlined" />}
                       <Chip label={t.category} size="small" variant="outlined" />
                     </Stack>
@@ -923,7 +923,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<SubjectIcon color="primary" />}
             title="科目专属设置"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             {subjects.length === 0 ? (
@@ -958,7 +958,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<ListAltIcon color="primary" />}
             title="反馈模块"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
             action={
               <Button size="small" startIcon={<AddIcon />} onClick={handleAddModule} sx={{ textTransform: 'none' }}>添加</Button>
             }
@@ -1007,7 +1007,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<PaletteIcon color="primary" />}
             title="界面主题"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -1029,7 +1029,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<DescriptionIcon color="primary" />}
             title="录音日志"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
@@ -1048,7 +1048,7 @@ export default function SettingsPage() {
           <CardHeader
             avatar={<StorageIcon color="primary" />}
             title="数据管理"
-            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+            titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
             {backupStatus && (
@@ -1191,7 +1191,7 @@ export default function SettingsPage() {
       <Dialog open={logPanelOpen} onClose={() => setLogPanelOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>
           <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box>📋 录音日志 ({logs.length}条)</Box>
+            <Box>录音日志 ({logs.length}条)</Box>
             <FormControl size="small" sx={{ minWidth: 100 }}>
               <Select
                 value={logFilter}
@@ -1226,7 +1226,7 @@ export default function SettingsPage() {
                     }}
                   >
                     <Box component="span" color="text.secondary">[{e.time}]</Box>{' '}
-                    <Box component="span" sx={{ fontWeight: 600, color: levelColor }}>{e.level.toUpperCase()}</Box>{' '}
+                    <Box component="span" sx={{ fontWeight: 500, color: levelColor }}>{e.level.toUpperCase()}</Box>{' '}
                     <Box component="span">{e.event}</Box>
                     {e.extra && <Box component="span" color="text.secondary"> | {String(e.extra)}</Box>}
                     <Box sx={{ fontSize: '0.65rem', color: 'text.disabled', mt: 0.25 }}>

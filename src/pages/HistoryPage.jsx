@@ -336,7 +336,7 @@ ${feedbackSummary}
           <IconButton onClick={() => navigate('/record')} aria-label="返回">
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>📋 历史反馈</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 500 }}>历史反馈</Typography>
         </Stack>
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <AssessmentIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 1 }} />
@@ -353,8 +353,8 @@ ${feedbackSummary}
         <IconButton onClick={() => navigate('/record')} aria-label="返回课堂录音">
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }} noWrap>
-          📋 {currentStudent.name} 的历史反馈
+        <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 500 }} noWrap>
+          {currentStudent.name} 的历史反馈
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
           共 {allHistory.length} 条
@@ -412,7 +412,7 @@ ${feedbackSummary}
             disabled={generatingSummary}
             sx={{ textTransform: 'none', borderRadius: 20, py: 1 }}
           >
-            {generatingSummary ? '生成中...' : '📊 生成学习总结'}
+            {generatingSummary ? '生成中...' : '生成学习总结'}
           </Button>
           <Stack direction="row" spacing={1}>
             <Button
@@ -481,8 +481,8 @@ ${feedbackSummary}
                     >
                       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: subject?.color || 'text.secondary', fontWeight: 600 }}>
-                            {subject ? `📚 ${subject.name}` : '📝 未分类'}
+                          <Typography variant="caption" sx={{ color: subject?.color || 'text.secondary', fontWeight: 500 }}>
+                            {subject ? subject.name : '未分类'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">{dateStr}</Typography>
                         </Stack>
@@ -541,10 +541,10 @@ ${feedbackSummary}
         {detailItem && (
           <>
             <DialogTitle sx={{ pb: 0.5 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
                 {(() => {
                   const subject = subjectMap[detailItem.subjectId];
-                  return subject ? `📚 ${subject.name}` : '📝 未分类';
+                  return subject ? subject.name : '未分类';
                 })()}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 'normal', mt: 0.25 }}>
@@ -558,7 +558,7 @@ ${feedbackSummary}
               <Stack spacing={2}>
                 {(detailItem.feedback || []).map((f, i) => (
                   <Box key={i}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
                       {getModuleIcon(f.module)} 【{f.module}】
                     </Typography>
                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -587,13 +587,13 @@ ${feedbackSummary}
 
       {/* ========== 学习总结 Dialog ========== */}
       <Dialog open={summaryOpen} onClose={() => setSummaryOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>📊 {summaryStudentName} 的学习总结</DialogTitle>
+        <DialogTitle>{summaryStudentName} 的学习总结</DialogTitle>
         <DialogContent dividers>
           {summaryData && (
             <Stack spacing={2}>
               {summaryData.map((s, i) => (
                 <Box key={i}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
                     【{s.title}】
                   </Typography>
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>

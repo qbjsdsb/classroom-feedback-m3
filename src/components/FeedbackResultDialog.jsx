@@ -313,7 +313,7 @@ export default function FeedbackResultDialog(props) {
         <Stack spacing={2}>
           {currentFeedback.map((item, index) => (
             <Paper key={index} variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
                 <Box component="span" sx={{ mr: 0.5 }} aria-hidden>
                   {getModuleIcon(item.module)}
                 </Box>
@@ -331,7 +331,7 @@ export default function FeedbackResultDialog(props) {
                 inputProps={{ 'aria-label': `编辑 ${item.module} 模块内容` }}
               />
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                💡 编辑后失焦自动保存
+                编辑后失焦自动保存
               </Typography>
             </Paper>
           ))}

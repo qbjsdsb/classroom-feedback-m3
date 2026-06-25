@@ -8,7 +8,8 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useThemeMode } from '../contexts/ThemeContext';
 
-const drawerWidth = 240;
+// 电脑端为主：侧边栏宽度足够舒展，内容区最大宽度放宽到 1080
+const drawerWidth = 256;
 
 const navItems = [
   { label: '学生管理', icon: <PeopleIcon />, path: '/students' },
@@ -17,7 +18,7 @@ const navItems = [
   { label: '系统设置', icon: <SettingsIcon />, path: '/settings' },
 ];
 
-// 响应式布局：桌面端侧边栏（md以上）+ 移动端底部导航栏（md以下）
+// 响应式布局：桌面端侧边栏（md 以上）+ 移动端底部导航栏（md 以下）
 export default function Layout({ children }) {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
@@ -27,29 +28,50 @@ export default function Layout({ children }) {
 
   const Sidebar = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Toolbar sx={{ px: 2.5 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>📚 课堂反馈助手</Typography>
+      <Toolbar sx={{ px: 3, minHeight: 64 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 500, letterSpacing: 0.15 }}>
+          课堂反馈助手
+        </Typography>
       </Toolbar>
-      <List sx={{ flex: 1, px: 1.5 }}>
-        {navItems.map((item) => (
-          <ListItemButton
-            key={item.path}
-            selected={location.pathname.startsWith(item.path)}
-            onClick={() => navigate(item.path)}
-            sx={{ borderRadius: 28, mb: 0.5, py: 1.1 }}
-          >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: location.pathname.startsWith(item.path) ? 600 : 400 }} />
-          </ListItemButton>
-        ))}
+      <List sx={{ flex: 1, px: 2, py: 1 }}>
+        {navItems.map((item) => {
+          const selected = location.pathname.startsWith(item.path);
+          return (
+            <ListItemButton
+              key={item.path}
+              selected={selected}
+              onClick={() => navigate(item.path)}
+              sx={{
+                borderRadius: 28,
+                mb: 0.5,
+                py: 1,
+                pl: 2,
+                // M3 navigation drawer item：选中态用 tonal 高亮
+                '&.Mui-selected': { bgcolor: 'action.selected' },
+                '&.Mui-selected:hover': { bgcolor: 'action.selected' },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40, color: selected ? 'primary.main' : 'text.secondary' }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  fontWeight: selected ? 500 : 400,
+                  color: selected ? 'primary.main' : 'text.primary',
+                }}
+              />
+            </ListItemButton>
+          );
+        })}
       </List>
       <Divider />
       <Box sx={{ p: 2 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <IconButton onClick={toggleMode} size="small" aria-label="切换主题">
-            {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <IconButton onClick={toggleMode} size="small" aria-label="切换主题" sx={{ bgcolor: 'action.hover' }}>
+            {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
           </IconButton>
-          <Typography variant="caption" color="text.secondary">课堂反馈助手 M3 · v0.2</Typography>
+          <Typography variant="caption" color="text.secondary">Material 3 · v0.2</Typography>
         </Stack>
       </Box>
     </Box>
@@ -69,6 +91,7 @@ export default function Layout({ children }) {
               borderRight: '1px solid',
               borderColor: 'divider',
               bgcolor: 'background.paper',
+              backgroundImage: 'none',
             },
           }}
         >
@@ -85,17 +108,19 @@ export default function Layout({ children }) {
               borderBottom: '1px solid',
               borderColor: 'divider',
               color: 'text.primary',
+              backgroundImage: 'none',
             }}
           >
             <Toolbar>
-              <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>📚 课堂反馈助手</Typography>
+              <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 500 }}>课堂反馈助手</Typography>
               <IconButton onClick={toggleMode} color="inherit" aria-label="切换主题">
                 {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
             </Toolbar>
           </AppBar>
         ) : null}
-        <Box sx={{ maxWidth: 920, mx: 'auto', p: { xs: 2, md: 3 } }}>
+        {/* 电脑端为主：内容区放宽到 1080，留白舒展 */}
+        <Box sx={{ maxWidth: { xs: '100%', md: 1080 }, mx: 'auto', p: { xs: 2, md: 4 }, py: { xs: 2, md: 4 } }}>
           {children}
         </Box>
       </Box>
@@ -109,6 +134,8 @@ export default function Layout({ children }) {
             zIndex: 1100,
             borderTop: '1px solid',
             borderColor: 'divider',
+            bgcolor: 'background.paper',
+            backgroundImage: 'none',
           }}
         >
           {navItems.map((item) => (

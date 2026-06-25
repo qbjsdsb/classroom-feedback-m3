@@ -171,8 +171,8 @@ export default function StudentsPage() {
     <Box sx={{ position: 'relative', pb: isGroupMode && selectedStudentIds.size > 0 ? 10 : 2 }}>
       {/* 标题栏 + 小组模式切换 */}
       <Stack direction="row" sx={{ mb: 2.5, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-          👥 学生管理
+        <Typography variant="h6" sx={{ fontWeight: 500 }}>
+          学生管理
         </Typography>
         <Button
           variant={isGroupMode ? 'contained' : 'outlined'}
@@ -188,9 +188,9 @@ export default function StudentsPage() {
 
       {/* 快速开始引导 */}
       {!hasSetup && tips.length > 0 ? (
-        <Card variant="outlined" sx={{ mb: 2.5, bgcolor: 'background.paper', borderColor: 'primary.light' }}>
+        <Card variant="outlined" sx={{ mb: 2.5, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>快速开始</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>快速开始</Typography>
             <Box component="ul" sx={{ m: 0, pl: 2 }}>
               {tips.map((tip, i) => (
                 <Box component="li" key={i} sx={{ mb: 0.5, color: 'text.secondary' }}>{tip}</Box>
@@ -241,11 +241,10 @@ export default function StudentsPage() {
 
       {/* 学生列表 */}
       {students.length === 0 ? (
-        <Card variant="outlined" sx={{ textAlign: 'center', py: 6 }}>
+        <Card variant="outlined" sx={{ textAlign: 'center', py: 8 }}>
           <CardContent>
-            <Typography variant="h4" sx={{ mb: 1 }}>📝</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>还没有添加学生</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/students/new')} sx={{ textTransform: 'none', borderRadius: 20 }}>
+            <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>还没有添加学生</Typography>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/students/new')}>
               添加第一名学生
             </Button>
           </CardContent>

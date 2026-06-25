@@ -113,8 +113,8 @@ export default function StudentFormPage() {
         <IconButton onClick={() => navigate('/students')} aria-label="返回学生管理">
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          {isEdit ? '✏️ 编辑学生' : '➕ 添加学生'}
+        <Typography variant="h6" sx={{ fontWeight: 500 }}>
+          {isEdit ? '编辑学生' : '添加学生'}
         </Typography>
       </Stack>
 
@@ -169,7 +169,7 @@ export default function StudentFormPage() {
         {/* 选修科目卡 */}
         <Card variant="outlined">
           <CardContent>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>选修科目</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1.5 }}>选修科目</Typography>
             {allSubjects.length === 0 ? (
               <Typography variant="body2" color="text.secondary">暂无科目，请在设置中添加</Typography>
             ) : (

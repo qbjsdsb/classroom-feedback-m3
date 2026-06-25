@@ -115,9 +115,9 @@ export default function RecordPage() {
         .map(id => store.getStudentById(id)?.name)
         .filter(Boolean)
         .join('、');
-      return { text: `👥 ${names}`, isGroup: true };
+      return { text: names, isGroup: true };
     } else if (currentStudent) {
-      return { text: `👤 ${currentStudent.name}`, isGroup: false };
+      return { text: currentStudent.name, isGroup: false };
     }
     return { text: '未选择学生', isGroup: false };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -429,11 +429,11 @@ export default function RecordPage() {
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }} noWrap>{headerInfo.text}</Typography>
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mt: 0.25, flexWrap: 'wrap', gap: 0.5, useFlexGap: true }}>
+          <Typography variant="h6" sx={{ fontWeight: 500 }} noWrap>{headerInfo.text}</Typography>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mt: 0.5, flexWrap: 'wrap', gap: 0.5, useFlexGap: true }}>
             <Chip
               size="small"
-              label={currentSubject ? `📚 ${currentSubject.name}` : '📚 未选择科目'}
+              label={currentSubject ? currentSubject.name : '未选择科目'}
               onClick={() => setSubjectSwitcherOpen(true)}
               onDelete={() => setSubjectSwitcherOpen(true)}
               deleteIcon={<ExpandMoreIcon sx={{ fontSize: 16 }} />}
@@ -442,17 +442,17 @@ export default function RecordPage() {
                 color: currentSubject?.color || 'text.secondary',
                 borderColor: currentSubject?.color ? `${currentSubject.color}66` : 'divider',
                 bgcolor: currentSubject?.color ? `${currentSubject.color}0F` : 'transparent',
-                height: 24,
+                height: 28,
                 fontWeight: 500,
               }}
             />
             <Chip
               size="small"
-              label={selectedPromptTemplateName ? `📋 ${selectedPromptTemplateName}` : '📋 模板'}
+              label={selectedPromptTemplateName || '选择模板'}
               onClick={() => setPromptPickerOpen(true)}
               variant="outlined"
               color={selectedPromptTemplateName ? 'primary' : 'default'}
-              sx={{ height: 24, fontWeight: 500 }}
+              sx={{ height: 28, fontWeight: 500 }}
             />
           </Stack>
         </Box>
@@ -521,7 +521,7 @@ export default function RecordPage() {
           )}
           {/* 长按提示 */}
           <Typography variant="caption" color="text.secondary">
-            👆 长按录音，松手停止
+            长按录音，松手停止
           </Typography>
         </Box>
 
@@ -562,7 +562,7 @@ export default function RecordPage() {
       {/* ========== 快捷回复库 ========== */}
       <Box sx={{ mb: 2 }}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle2">⚡ 快捷回复</Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>快捷回复</Typography>
           <Stack direction="row" spacing={1}>
             <IconButton size="small" onClick={() => setAddQuickReplyOpen(true)} aria-label="添加快捷回复">
               <AddIcon fontSize="small" />
@@ -610,7 +610,7 @@ export default function RecordPage() {
       {currentStudent && (
         <Box sx={{ mb: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography variant="subtitle2">📌 {currentStudent.name}的常用点评</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>{currentStudent.name}的常用点评</Typography>
             <IconButton size="small" onClick={() => setStudentTemplatesExpanded(!studentTemplatesExpanded)} aria-label="展开/收起学生模板">
               {studentTemplatesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
             </IconButton>
@@ -659,7 +659,7 @@ export default function RecordPage() {
       {/* ========== 文本框区域 ========== */}
       <Box sx={{ mb: 2 }}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="subtitle2">📝 课堂内容（可直接输入或编辑）</Typography>
+          <Typography variant="subtitle2" color="text.secondary">课堂内容（可直接输入或编辑）</Typography>
           <Stack direction="row" spacing={1}>
             {currentStudent && (
               <Button size="small" startIcon={<BookmarkIcon />} onClick={saveAsTemplate} sx={{ textTransform: 'none' }}>
@@ -719,7 +719,7 @@ export default function RecordPage() {
           disabled={generating}
           sx={{ textTransform: 'none', borderRadius: 28, py: 1.2, fontSize: '1rem' }}
         >
-          {generating ? '生成中...' : '✨ 生成反馈'}
+          {generating ? '生成中...' : '生成反馈'}
         </Button>
         {currentStudent && (
           <Button
@@ -778,7 +778,7 @@ export default function RecordPage() {
             <Box>
               {[...new Set(promptTemplates.map(t => t.category))].map(cat => (
                 <Box key={cat} sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>
                     {cat}
                   </Typography>
                   {promptTemplates.filter(t => t.category === cat).map(t => (
@@ -789,7 +789,7 @@ export default function RecordPage() {
                       onClick={() => selectPromptTemplate(t.id)}
                     >
                       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{t.name}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{t.name}</Typography>
                         {t.description && (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                             {t.description}

@@ -33,9 +33,9 @@ export default function SubjectSelectPage() {
         .map(id => store.getStudentById(id)?.name)
         .filter(Boolean)
         .join('、');
-      return { title: '选择科目', subtitle: `👥 ${names || ''}` };
+      return { title: '选择科目', subtitle: names || '' };
     } else if (currentStudent) {
-      return { title: '选择科目', subtitle: `👤 ${currentStudent.name}` };
+      return { title: '选择科目', subtitle: currentStudent.name };
     }
     return { title: '选择科目', subtitle: '请先选择学生' };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,8 +81,8 @@ export default function SubjectSelectPage() {
           <ArrowBackIcon />
         </IconButton>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>{title}</Typography>
-          <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>{title}</Typography>
+          {subtitle ? <Typography variant="body2" color="text.secondary">{subtitle}</Typography> : null}
         </Box>
       </Stack>
 
@@ -90,9 +90,8 @@ export default function SubjectSelectPage() {
       {displaySubjects.length === 0 ? (
         <Card variant="outlined" sx={{ textAlign: 'center', py: 6, mt: 2 }}>
           <CardContent>
-            <Typography variant="h4" sx={{ mb: 1 }}>📚</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>暂无科目</Typography>
-            <Button variant="contained" onClick={() => navigate('/settings')} sx={{ textTransform: 'none', borderRadius: 20 }}>前往设置添加科目</Button>
+            <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>暂无科目</Typography>
+            <Button variant="contained" onClick={() => navigate('/settings')}>前往设置添加科目</Button>
           </CardContent>
         </Card>
       ) : (
@@ -121,12 +120,12 @@ export default function SubjectSelectPage() {
                       height: 56,
                       mb: 1.5,
                       fontSize: 24,
-                      fontWeight: 600,
+                      fontWeight: 500,
                     }}
                   >
                     {s.name.charAt(0)}
                   </Avatar>
-                  <Typography sx={{ color: s.color, fontWeight: 600 }}>{s.name}</Typography>
+                  <Typography sx={{ color: s.color, fontWeight: 500 }}>{s.name}</Typography>
                 </CardActionArea>
               </Card>
             </Grid>
