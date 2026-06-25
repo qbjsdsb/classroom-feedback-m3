@@ -25,7 +25,6 @@ const DEFAULT_STYLE = {
     useEmoji: false,        // 默认关闭表情
     emojiPosition: 'content', // content(内容中), title(标题后), end(模块末尾), none(不使用)
     customPrompt: '',
-    language: 'zh',
     // 全局字数限制（后备值）
     minLength: 50,          // 每模块最少字数
     maxLength: 150,         // 每模块最多字数
@@ -92,7 +91,21 @@ const DEFAULT_STYLE = {
     // ===== 模块默认描述表 + icon 映射表可覆盖（第二期 P1-7） =====
     // 为空对象时回退到代码内置硬编码映射；非空时按模块名覆盖
     moduleIconOverrides: {},
-    moduleDescriptionOverrides: {}
+    moduleDescriptionOverrides: {},
+
+    // ===== 高级参数（第三期 P2） =====
+    // System Prompt 人设（为空时回退到代码内置默认人设）
+    systemPrompt: '',
+    // API 调用温度（0-2，越高越随机；默认 0.7）
+    temperature: 0.7,
+    // API 输出 token 上限（默认 16384）
+    maxOutputTokens: 16384,
+    // 历史保留条数（默认 50）
+    historyLimit: 50,
+    // 反馈语言（'zh' 中文 / 'en' 英文；默认 zh，prompt 注入语言指令）
+    language: 'zh',
+    // 标题小组姓名连接符（默认 '、'）
+    groupNameSeparator: '、'
 };
 
 const DEFAULT_THEME = 'default'; // default, dark, warm, green

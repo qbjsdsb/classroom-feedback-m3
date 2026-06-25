@@ -108,13 +108,14 @@ export function generateFeedbackTitle({ student, group, subject, getStudentById,
     let trialPart = '';
 
     if (group && group.length > 0) {
-        // 小组模式：所有学生姓名用顿号连接
+        // 小组模式：所有学生姓名用连接符拼接（默认顿号，可配 style.groupNameSeparator）
+        const sep = (style && style.groupNameSeparator) || '、';
         const names = group.map(id => {
             const s = getStudentById(id);
             if (!s) return '';
             return getDisplayName(s.name, style);
         }).filter(Boolean);
-        namePart = names.join('、');
+        namePart = names.join(sep);
         // 多人时只要有任一学生是试听生，标记"试听"
         const hasTrial = group.some(id => {
             const s = getStudentById(id);

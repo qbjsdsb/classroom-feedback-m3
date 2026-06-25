@@ -2,6 +2,7 @@
 // 原 /workspace/newclassroom/js/models.js 迁移而来
 
 import DB from '../db';
+import Storage from '../storage';
 
 const DEFAULT_SUBJECTS = [
     { id: 'sub_chin', name: '语文', color: '#EF4444', order: 0 },
@@ -364,8 +365,17 @@ class DataStore {
             id: `fb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             createdAt: new Date().toISOString()
         });
-        // 保留最近50条
-        if (history.length > 50) history = history.slice(history.length - 50);
+        // 保留最近 N 条（从 style.historyLimit 读取，默认 50）
+        let limit = 50;
+        try {
+            const style = Storage.getStyle();
+            if (style && typeof style.historyLimit === 'number' && style.historyLimit > 0) {
+                limit = style.historyLimit;
+            }
+        } catch (e) {
+            // Storage 未就绪时用默认 50
+        }
+        if (history.length > limit) history = history.slice(history.length - limit);
         this._feedbackCache[studentId] = history;
         DB.putRecord('feedback', { studentId, history }).catch(e =>
             console.warn('[DataStore] 保存反馈失败:', e)

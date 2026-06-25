@@ -191,11 +191,11 @@ ${moduleInstructions}
                 body: JSON.stringify({
                     model: AiService.getModel(),
                     messages: [
-                        { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会创造不存在的昵称。你必须以 JSON 格式输出结果。' },
+                        { role: 'system', content: AiService.getSystemPrompt(style) },
                         { role: 'user', content: prompt }
                     ],
-                    temperature: 0.7,
-                    max_tokens: this.MAX_OUTPUT_TOKENS,
+                    temperature: (style && typeof style.temperature === 'number') ? style.temperature : 0.7,
+                    max_tokens: (style && style.maxOutputTokens) ? style.maxOutputTokens : this.MAX_OUTPUT_TOKENS,
                     response_format: { type: 'json_object' }
                 }),
                 signal
@@ -288,6 +288,37 @@ ${moduleInstructions}
         }
 
         return parts.length > 0 ? parts.join(' ') : '';
+    }
+
+    /**
+     * 获取 System Prompt（人设）
+     * - 优先使用 style.systemPrompt（用户自定义）
+     * - 为空时回退到内置默认人设（单学生/小组两种变体）
+     * - 追加语言指令（style.language 非 zh 时注入英文输出指令）
+     *
+     * @param {object} style - 风格对象
+     * @param {boolean} [isGroup=false] - 是否小组模式
+     * @returns {string} System Prompt 内容
+     */
+    static getSystemPrompt(style, isGroup = false) {
+        let persona;
+        if (style && style.systemPrompt && typeof style.systemPrompt === 'string' && style.systemPrompt.trim()) {
+            persona = style.systemPrompt.trim();
+        } else if (isGroup) {
+            persona = '你是一位经验丰富的教育培训老师，擅长为多位学生分别撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会混淆不同学生的表现。你必须以 JSON 格式输出结果。';
+        } else {
+            persona = '你是一位经验丰富的教育培训老师，擅长撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会创造不存在的昵称。你必须以 JSON 格式输出结果。';
+        }
+
+        // 语言指令
+        if (style && style.language && style.language !== 'zh') {
+            if (style.language === 'en') {
+                persona += '\n请使用英文输出所有反馈内容。';
+            } else {
+                persona += `\n请使用 ${style.language} 语言输出所有反馈内容。`;
+            }
+        }
+        return persona;
     }
 
     /**
@@ -893,11 +924,11 @@ ${(() => {
                 body: JSON.stringify({
                     model: AiService.getModel(),
                     messages: [
-                        { role: 'system', content: '你是一位经验丰富的教育培训老师，擅长为多位学生分别撰写专业、有针对性的课堂反馈。你严格遵守姓名处理规则，不会混淆不同学生的表现。你必须以 JSON 格式输出结果。' },
+                        { role: 'system', content: AiService.getSystemPrompt(style, true) },
                         { role: 'user', content: prompt }
                     ],
-                    temperature: 0.7,
-                    max_tokens: this.MAX_OUTPUT_TOKENS,
+                    temperature: (style && typeof style.temperature === 'number') ? style.temperature : 0.7,
+                    max_tokens: (style && style.maxOutputTokens) ? style.maxOutputTokens : this.MAX_OUTPUT_TOKENS,
                     response_format: { type: 'json_object' }
                 }),
                 signal
@@ -1249,7 +1280,11 @@ ${samplesBlock}
   "useAttachmentHint": true或false，样本末尾是否有附件/照片/视频提示,
   "attachmentHint": "附件提示文本。从样本末尾反推；useAttachmentHint 为 false 时返回空字符串",
 
-  "customPrompt": "整体写作要求备注（1-3句话，总结样本的整体写作风格、语气特点、特殊要求，作为每次生成反馈时的追加要求）。无特殊要求返回空字符串"
+  "customPrompt": "整体写作要求备注（1-3句话，总结样本的整体写作风格、语气特点、特殊要求，作为每次生成反馈时的追加要求）。无特殊要求返回空字符串",
+
+  "language": "样本输出语言，从以下枚举选一：zh(中文) | en(English) | ja(日本語)。若样本为纯中文返回 zh；纯英文返回 en；纯日文返回 ja；混合或无法判断返回 null",
+  "groupNameSeparator": "小组模式下多学生姓名的连接符。仅当样本标题或正文出现多个学生姓名拼接时反推（如'小明、小红'→'、'；'小明,小红'→','；'小明 小红'→' '）。单学生样本或无拼接迹象返回 null",
+  "systemPrompt": "自定义系统 Prompt。仅当样本风格极其特殊、无法用上述字段（语气/分点/emoji/模块等）复刻时，才给出一段完整的系统人设指令（覆盖默认人设）。绝大多数情况返回 null——优先用其他字段组合复刻风格"
 }
 
 ## 分析要点
