@@ -2,7 +2,7 @@
 // 整合所有上下文：ThemeContext、DataContext、SessionContext
 // 全局 UiBridge 监听 Toast/Confirm/Loading 事件
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider, CssBaseline, Box, CircularProgress, Typography } from '@mui/material';
 import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext';
 import { useThemeMode } from './contexts/ThemeContext';
@@ -27,7 +27,7 @@ function ThemedApp() {
   return (
     <MuiThemeProvider theme={theme}>
       <CssBaseline />
-      <BrowserRouter>
+      <HashRouter>
         <Layout>
           {/* 全局 UI 事件监听组件 */}
           <UiBridge />
@@ -49,7 +49,7 @@ function ThemedApp() {
             </Routes>
           )}
         </Layout>
-      </BrowserRouter>
+      </HashRouter>
     </MuiThemeProvider>
   );
 }

@@ -1377,11 +1377,13 @@ export class RecorderEngine {
                 // 关闭远程模型下载：彻底杜绝任何代码路径去打 hf-mirror.com
                 // （hf-mirror 对 onnx 会 302 重定向到 cas-bridge.xethub.hf.co，
                 // 该 xet CDN 在国内被墙，浏览器无法访问，下载必失败）
-                // 配合 local_files_only:true，所有模型文件只能从本地 /vendor/ 加载
+                // 配合 local_files_only:true，所有模型文件只能从本地 vendor/ 加载
                 transformers.env.allowRemoteModels = false;
-                // 指定本地模型路径为 /vendor，transformers.js 会从
-                // {localModelPath}/{modelId}/ 加载文件，即 /vendor/whisper-tiny/
-                transformers.env.localModelPath = '/vendor';
+                // 指定本地模型路径：用 import.meta.env.BASE_URL 动态拼接
+                // 本地开发 BASE_URL='/' → '/vendor'
+                // GitHub Pages 部署 BASE_URL='/classroom-feedback-m3-pages/' → '/classroom-feedback-m3-pages/vendor'
+                // transformers.js 会从 {localModelPath}/{modelId}/ 加载文件，即 {BASE_URL}vendor/whisper-tiny/
+                transformers.env.localModelPath = `${import.meta.env.BASE_URL}vendor`;
                 console.log('[Whisper] env.localModelPath:', transformers.env.localModelPath);
                 console.log('[Whisper] env.allowLocalModels:', transformers.env.allowLocalModels);
                 console.log('[Whisper] env.allowRemoteModels:', transformers.env.allowRemoteModels);

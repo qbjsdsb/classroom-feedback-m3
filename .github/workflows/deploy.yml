@@ -1,0 +1,74 @@
+# 构建 classroom-feedback-m3 并部署到独立仓库 qbjsdsb/classroom-feedback-m3-pages 的 gh-pages 分支
+# 该部署仓库启用 GitHub Pages，访问地址 https://qbjsdsb.github.io/classroom-feedback-m3-pages/
+#
+# 跨仓库推送通过 SSH deploy key 实现：
+#   - 公钥已添加到部署仓库的 deploy keys（write 权限）
+#   - 私钥已作为源码仓库 secret DEPLOY_SSH_KEY 存储
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一时间只允许一个部署任务运行，避免并发推送冲突
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (with Pages base path)
+        env:
+          # 部署到子路径 /classroom-feedback-m3-pages/，Vite base 需匹配
+          VITE_BASE: /classroom-feedback-m3-pages/
+        run: npm run build
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # 信任部署仓库的 host（避免首次连接交互）
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          # 配置 SSH 使用该密钥访问部署仓库
+          cat >> ~/.ssh/config <<EOF
+          Host github.com
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Push to deploy repo gh-pages branch
+        env:
+          DEPLOY_REPO: git@github.com:qbjsdsb/classroom-feedback-m3-pages.git
+        run: |
+          cd dist
+          git init -b gh-pages
+          git add -A
+          git commit -m "Deploy from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+          git remote add deploy "$DEPLOY_REPO"
+          git push -f deploy gh-pages
