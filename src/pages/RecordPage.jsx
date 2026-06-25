@@ -27,6 +27,9 @@ import { useRecorder } from '../hooks/useRecorder';
 import { useData } from '../store/DataContext';
 import { useSession } from '../store/SessionContext';
 import { UI } from '../utils/ui';
+import AiService from '../services/aiService';
+import { matchStudentByName, truncateTranscriptForStore } from '../utils/feedback';
+import FeedbackResultDialog from '../components/FeedbackResultDialog';
 
 /**
  * 替换模板中的变量占位符
@@ -71,6 +74,11 @@ export default function RecordPage() {
   const [addQuickReplyOpen, setAddQuickReplyOpen] = useState(false);
   const [selectedPromptTemplateId, setSelectedPromptTemplateId] = useState(null);
   const [generating, setGenerating] = useState(false);
+  // 反馈结果展示
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [feedbackMode, setFeedbackMode] = useState('single'); // 'single' | 'group'
+  const [singleFeedback, setSingleFeedback] = useState(null); // 单学生模式反馈数组
+  const [groupFeedbacks, setGroupFeedbacks] = useState(null); // 小组模式反馈数组
   // 添加快捷回复表单
   const [qrContent, setQrContent] = useState('');
   const [qrCategory, setQrCategory] = useState('表扬');
@@ -258,7 +266,7 @@ export default function RecordPage() {
     UI.showToast(`已应用模板「${template.name}」`);
   }, [store]);
 
-  // ========== 操作：生成反馈（AI 服务第五阶段迁移，先预留） ==========
+  // ========== 操作：生成反馈（接入 AiService） ==========
   const generateFeedback = useCallback(async () => {
     // 防重复提交
     if (generating) return;
@@ -282,18 +290,114 @@ export default function RecordPage() {
 
     setGenerating(true);
     UI.showLoading('正在分析课堂内容...');
+
+    // 进度提示定时器（模拟原 recordPage.js 的进度切换逻辑）
+    // 通过 UI.updateLoading 更新 Backdrop 文案，避免直接 DOM 操作
+    let progressStage = 0;
+    const progressTimer = setInterval(() => {
+      progressStage = (progressStage + 1) % 3;
+      const messages = ['正在分析课堂内容...', '正在生成反馈内容...', '即将完成，请稍候...'];
+      UI.updateLoading(messages[progressStage]);
+    }, 4000);
+
     try {
-      // AI 服务尚未迁移（第五阶段实现）
-      throw new Error('AI 功能将在后续版本支持');
+      const moduleNames = modules.map(m => m.name);
+      const style = Storage.getStyle();
+      // 如果选中了模板，临时屏蔽 customPrompt 避免与模板 prompt 重复
+      // （不修改 Storage 中的值，生成后 customPrompt 仍然保留）
+      const effectiveStyle = selectedPromptTemplateId
+        ? { ...style, customPrompt: '' }
+        : style;
+      const subject = currentSubject;
+      const subjectName = subject?.name || '';
+      const storedTranscript = truncateTranscriptForStore(text);
+
+      if (currentGroup && currentGroup.length > 0) {
+        // ===== 小组模式 =====
+        const studentNames = currentGroup
+          .map(id => store.getStudentById(id)?.name)
+          .filter(Boolean);
+        if (studentNames.length === 0) {
+          UI.showToast('未找到学生信息');
+          return;
+        }
+
+        UI.updateLoading('正在为 ' + studentNames.length + ' 位学生生成反馈...');
+        const feedbacks = await AiService.generateGroupFeedback(
+          text, moduleNames, studentNames, subjectName, effectiveStyle,
+          subject?.id, selectedPromptTemplateId
+        );
+
+        // 为每位学生保存到各自的历史记录
+        const groupStudents = currentGroup.map(id => store.getStudentById(id)).filter(Boolean);
+        for (const fb of feedbacks) {
+          const matchedStudent = matchStudentByName(groupStudents, fb.studentName);
+          if (matchedStudent) {
+            store.addFeedback(matchedStudent.id, {
+              subjectId: subject?.id,
+              transcript: storedTranscript,
+              feedback: fb.feedback
+            });
+          }
+        }
+
+        // 打开结果展示 Dialog
+        setFeedbackMode('group');
+        setGroupFeedbacks(feedbacks);
+        setSingleFeedback(null);
+        setFeedbackDialogOpen(true);
+        refresh();
+        // 清空转录文本（模拟原 clearTranscript）
+        recorder.clearTranscript();
+      } else if (currentStudent) {
+        // ===== 单学生模式 =====
+        const studentName = currentStudent.name;
+        UI.updateLoading('正在生成反馈内容...');
+        const feedback = await AiService.generateFeedback(
+          text, moduleNames, studentName, subjectName, effectiveStyle,
+          subject?.id, selectedPromptTemplateId
+        );
+
+        store.addFeedback(currentStudent.id, {
+          subjectId: subject?.id,
+          transcript: storedTranscript,
+          feedback
+        });
+
+        // 打开结果展示 Dialog
+        setFeedbackMode('single');
+        setSingleFeedback(feedback);
+        setGroupFeedbacks(null);
+        setFeedbackDialogOpen(true);
+        refresh();
+        recorder.clearTranscript();
+      } else {
+        UI.showToast('请先选择学生');
+        return;
+      }
     } catch (err) {
       UI.showToast('生成失败：' + err.message);
     } finally {
+      clearInterval(progressTimer);
       UI.hideLoading();
       setGenerating(false);
-      // 清除本次使用的模板ID
+      // 清除本次使用的模板ID，避免下次生成时无意识地继续使用
       setSelectedPromptTemplateId(null);
     }
-  }, [generating, recorder.displayText, Storage, navigate]);
+  }, [
+    generating, recorder.displayText, recorder.clearTranscript, Storage, navigate,
+    selectedPromptTemplateId, currentSubject, currentStudent, currentGroup, store, refresh,
+  ]);
+
+  // ========== 关闭反馈结果 Dialog 时清理状态 ==========
+  const handleCloseFeedbackDialog = useCallback(() => {
+    setFeedbackDialogOpen(false);
+    // 延迟清理，避免动画期间 UI 闪烁
+    setTimeout(() => {
+      setSingleFeedback(null);
+      setGroupFeedbacks(null);
+    }, 200);
+  }, []);
 
   // ========== 操作：导入录音文件 ==========
   const handleFileImport = useCallback((e) => {
@@ -757,6 +861,25 @@ export default function RecordPage() {
           <Button variant="contained" onClick={handleSaveQuickReply}>保存</Button>
         </DialogActions>
       </Dialog>
+
+      {/* ========== 反馈结果展示 Dialog ========== */}
+      <FeedbackResultDialog
+        open={feedbackDialogOpen}
+        onClose={handleCloseFeedbackDialog}
+        mode={feedbackMode}
+        feedback={singleFeedback}
+        feedbacks={groupFeedbacks}
+        student={currentStudent}
+        group={currentGroup}
+        subject={currentSubject}
+        store={store}
+        getStudentById={store.getStudentById.bind(store)}
+        style={Storage.getStyle()}
+        onRegenerate={() => {
+          // 重新生成：留在当前页，让用户重新输入后点"生成反馈"
+          UI.showToast('请重新录音或输入内容后再次生成');
+        }}
+      />
     </Box>
   );
 }
