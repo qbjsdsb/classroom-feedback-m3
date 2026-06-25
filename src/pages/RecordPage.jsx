@@ -464,7 +464,7 @@ export default function RecordPage() {
       {/* ========== 课堂计时器 ========== */}
       <Box sx={{ textAlign: 'center', my: 2 }}>
         <Typography
-          variant="h3"
+          variant="h4"
           sx={{
             fontWeight: 300,
             fontVariantNumeric: 'tabular-nums',
@@ -484,8 +484,8 @@ export default function RecordPage() {
               ref={btnRef}
               color={recorder.isRecording ? 'error' : 'primary'}
               sx={{
-                width: 88,
-                height: 88,
+                width: 72,
+                height: 72,
                 boxShadow: recorder.longPressActive ? 6 : 1,
                 transform: recorder.longPressActive ? 'scale(1.05)' : 'scale(1)',
                 transition: 'all 0.2s',
@@ -712,12 +712,12 @@ export default function RecordPage() {
       <Stack spacing={1} sx={{ mb: 2 }}>
         <Button
           variant="contained"
-          size="large"
+          size="medium"
           fullWidth
           startIcon={generating ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
           onClick={generateFeedback}
           disabled={generating}
-          sx={{ textTransform: 'none', borderRadius: 28, py: 1.2, fontSize: '1rem' }}
+          sx={{ textTransform: 'none', borderRadius: 16 }}
         >
           {generating ? '生成中...' : '生成反馈'}
         </Button>

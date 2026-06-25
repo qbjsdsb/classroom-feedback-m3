@@ -338,7 +338,7 @@ ${feedbackSummary}
           </IconButton>
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 500 }}>历史反馈</Typography>
         </Stack>
-        <Box sx={{ textAlign: 'center', py: 8 }}>
+        <Box sx={{ textAlign: 'center', py: 6 }}>
           <AssessmentIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 1 }} />
           <Typography color="text.secondary">请先选择学生</Typography>
         </Box>
@@ -461,7 +461,7 @@ ${feedbackSummary}
                 <Typography variant="caption" color="text.secondary">{group.items.length}条</Typography>
               </Stack>
               <Divider sx={{ mb: 1 }} />
-              <Stack spacing={1.5}>
+              <Stack spacing={1}>
                 {group.items.map(item => {
                   const subject = subjectMap[item.subjectId];
                   const date = new Date(item.createdAt);

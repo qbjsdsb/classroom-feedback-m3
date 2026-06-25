@@ -103,23 +103,23 @@ export default function SubjectSelectPage() {
                 sx={{
                   borderColor: s.color,
                   borderWidth: 1,
-                  borderRadius: 3,
+                  borderRadius: 12,
                   transition: 'all 0.2s',
                   '&:hover': { boxShadow: 4, borderColor: s.color, transform: 'translateY(-2px)' },
                 }}
               >
                 <CardActionArea
                   onClick={() => selectSubject(s.id)}
-                  sx={{ p: 2.5, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                  sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                 >
                   <Avatar
                     sx={{
                       bgcolor: hexToRgba(s.color, 0.14),
                       color: s.color,
-                      width: 56,
-                      height: 56,
-                      mb: 1.5,
-                      fontSize: 24,
+                      width: 48,
+                      height: 48,
+                      mb: 1,
+                      fontSize: 20,
                       fontWeight: 500,
                     }}
                   >

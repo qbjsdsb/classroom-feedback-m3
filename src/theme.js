@@ -57,17 +57,29 @@ export function createAppTheme(mode) {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          // M3 filled 按钮用胶囊；outlined/text 用 8 圆角更扁平
+          // M3 filled 按钮用胶囊；outlined/text 用更小圆角更扁平
           root: ({ ownerState }) => ({
-            borderRadius: ownerState.variant === 'contained' ? 20 : 12,
+            borderRadius: ownerState.variant === 'contained' ? 16 : 10,
           }),
         },
       },
       MuiCard: {
-        // M3 outlined：无阴影，仅 1px 边框；保留默认 16 圆角
+        // M3 outlined：无阴影，仅 1px 边框；紧凑化 12 圆角
         defaultProps: { variant: 'outlined', elevation: 0 },
         styleOverrides: {
-          root: { borderRadius: 16, boxShadow: 'none' },
+          root: { borderRadius: 12, boxShadow: 'none' },
+        },
+      },
+      MuiCardContent: {
+        // 紧凑化：默认 padding 16/24 → 12/12（最大松散源）
+        styleOverrides: {
+          root: { padding: 12, '&:last-child': { paddingBottom: 12 } },
+        },
+      },
+      MuiCardHeader: {
+        // 紧凑化：收紧 CardHeader 内边距
+        styleOverrides: {
+          root: { padding: 12 },
         },
       },
       MuiPaper: {

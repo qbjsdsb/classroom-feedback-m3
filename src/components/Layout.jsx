@@ -8,8 +8,8 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useThemeMode } from '../contexts/ThemeContext';
 
-// 电脑端为主：侧边栏宽度足够舒展，内容区最大宽度放宽到 1080
-const drawerWidth = 256;
+// 电脑端为主：侧边栏紧凑化，内容区最大宽度 960
+const drawerWidth = 240;
 
 const navItems = [
   { label: '学生管理', icon: <PeopleIcon />, path: '/students' },
@@ -119,8 +119,8 @@ export default function Layout({ children }) {
             </Toolbar>
           </AppBar>
         ) : null}
-        {/* 电脑端为主：内容区放宽到 1080，留白舒展 */}
-        <Box sx={{ maxWidth: { xs: '100%', md: 1080 }, mx: 'auto', p: { xs: 2, md: 4 }, py: { xs: 2, md: 4 } }}>
+        {/* 电脑端为主：内容区紧凑化 960，留白收紧 */}
+        <Box sx={{ maxWidth: { xs: '100%', md: 960 }, mx: 'auto', p: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
           {children}
         </Box>
       </Box>

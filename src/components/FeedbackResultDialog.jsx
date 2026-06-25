@@ -312,7 +312,7 @@ export default function FeedbackResultDialog(props) {
         {/* ========== 反馈模块列表（可编辑） ========== */}
         <Stack spacing={2}>
           {currentFeedback.map((item, index) => (
-            <Paper key={index} variant="outlined" sx={{ p: 2 }}>
+            <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
                 <Box component="span" sx={{ mr: 0.5 }} aria-hidden>
                   {getModuleIcon(item.module)}
@@ -343,7 +343,7 @@ export default function FeedbackResultDialog(props) {
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2 }}>
+      <DialogActions sx={{ px: 2.5, py: 1.5 }}>
         {/* 小组模式：底部翻页按钮 */}
         {mode === 'group' && groupData.length > 1 && (
           <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mr: 'auto' }}>

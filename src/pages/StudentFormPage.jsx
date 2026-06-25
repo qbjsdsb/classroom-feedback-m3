@@ -119,11 +119,11 @@ export default function StudentFormPage() {
       </Stack>
 
       {/* 表单 */}
-      <Stack spacing={2.5}>
+      <Stack spacing={2}>
         {/* 基本信息卡 */}
         <Card variant="outlined">
           <CardContent>
-            <Stack spacing={2.5}>
+            <Stack spacing={2}>
               <TextField
                 label="学生姓名 *"
                 placeholder="请输入学生姓名…"
@@ -213,11 +213,11 @@ export default function StudentFormPage() {
         <Button
           variant="contained"
           color="primary"
-          size="large"
+          size="medium"
           startIcon={<SaveIcon />}
           onClick={handleSave}
           fullWidth
-          sx={{ textTransform: 'none', borderRadius: 28 }}
+          sx={{ textTransform: 'none', borderRadius: 16 }}
         >
           {isEdit ? '保存修改' : '添加学生'}
         </Button>
@@ -227,11 +227,11 @@ export default function StudentFormPage() {
           <Button
             variant="outlined"
             color="error"
-            size="large"
+            size="medium"
             startIcon={<DeleteIcon />}
             onClick={handleDelete}
             fullWidth
-            sx={{ textTransform: 'none', borderRadius: 28 }}
+            sx={{ textTransform: 'none', borderRadius: 16 }}
           >
             删除学生
           </Button>

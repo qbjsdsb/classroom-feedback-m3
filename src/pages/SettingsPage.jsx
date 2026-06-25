@@ -572,7 +572,7 @@ export default function SettingsPage() {
         <Typography variant="h6" sx={{ flexGrow: 1 }}>⚙️ 系统设置</Typography>
       </Stack>
 
-      <Stack spacing={3}>
+      <Stack spacing={2}>
         {/* ========== 1. API Key 设置 ========== */}
         <Card variant="outlined">
           <CardHeader
@@ -699,7 +699,7 @@ export default function SettingsPage() {
             titleTypographyProps={{ variant: 'subtitle1', fontWeight: 500 }}
           />
           <CardContent sx={{ pt: 0 }}>
-            <Stack spacing={2.5}>
+            <Stack spacing={2}>
               {/* 语气风格 */}
               <Box>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>语气风格</Typography>
@@ -903,7 +903,7 @@ export default function SettingsPage() {
             )}
 
             {/* 临时备注 */}
-            <Box sx={{ mt: 2.5 }}>
+            <Box sx={{ mt: 2 }}>
               <Typography variant="body2" sx={{ mb: 1 }}>临时备注（每次生成反馈时追加）</Typography>
               <TextField
                 multiline
@@ -1079,11 +1079,11 @@ export default function SettingsPage() {
         <Box sx={{ position: 'sticky', bottom: 16, zIndex: 10 }}>
           <Button
             variant="contained"
-            size="large"
+            size="medium"
             startIcon={<SaveIcon />}
             onClick={handleSave}
             fullWidth
-            sx={{ textTransform: 'none', borderRadius: 28, boxShadow: 3 }}
+            sx={{ textTransform: 'none', borderRadius: 16 }}
           >
             保存设置
           </Button>
