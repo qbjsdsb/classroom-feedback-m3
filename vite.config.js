@@ -16,7 +16,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       // includeAssets 用相对路径，base 已由 Vite 自动处理前缀
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-192.png', 'icon-maskable-512.png'],
       manifest: {
         name: '课堂反馈助手',
         short_name: '课堂反馈',
@@ -27,8 +27,14 @@ export default defineConfig({
         // start_url 和 icon.src 用相对路径，部署到子路径时自动解析
         start_url: './',
         scope: './',
+        // Mac 程序坞/Safari "添加到程序坞"要求 PNG 图标（192/512），仅 SVG 会安装失败
+        // maskable：图标内容在中心 80% safe zone，外圈填充背景色，适配 Android/iOS 圆形裁剪
         icons: [
-          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         categories: ['education', 'productivity']
       },
