@@ -475,6 +475,14 @@ ${segment}
     }
 
     static getModuleDescription(moduleName) {
+        // 先从用户配置读：优先 module.prompt（批次2新增），其次 module.description（自定义模块原有）
+        const modules = Storage.getModules();
+        const mod = modules.find(m => m.name === moduleName);
+        if (mod) {
+            if (mod.prompt && mod.prompt.trim()) return mod.prompt.trim();
+            if (mod.description && mod.description.trim()) return mod.description.trim();
+        }
+        // 回退到按模块名硬编码的默认描述
         const map = {
             '课堂内容': '总结本节课讲解的主要知识点和教学内容',
             '课堂表现': '描述学生在课堂上的参与度、专注度、互动情况等',
@@ -483,10 +491,7 @@ ${segment}
             '后续计划': '说明后续课程安排、预习要求或长期学习计划'
         };
         if (map[moduleName]) return map[moduleName];
-        // 自定义模块：从 Storage 读取 description
-        const modules = Storage.getModules();
-        const mod = modules.find(m => m.name === moduleName && m.custom);
-        return (mod && mod.description) ? mod.description : '生成相关内容';
+        return '生成相关内容';
     }
 
     /**
@@ -1082,6 +1087,96 @@ ${moduleInstructions}
 
         // 确保结果包含所有学生（复用公共方法）
         return this._ensureAllStudents(result, studentNames, modules);
+    }
+
+    /**
+     * 智能分析一段课堂反馈样本，反推系统的可配置项（语气/emoji/模块/标题/格式等）。
+     * 返回结构化 JSON，由前端展示预览并让用户勾选应用。
+     *
+     * @param {string} sampleText - 用户粘贴的完整反馈样本（含标题+正文）
+     * @param {object} [options]
+     * @param {AbortSignal} [options.signal]
+     * @returns {Promise<object>} 分析结果，字段对齐系统可配置项；无法推断的字段为 null
+     */
+    static async analyzeFeedbackStyle(sampleText, { signal } = {}) {
+        const apiKey = Storage.getApiKey();
+        if (!apiKey) throw new Error('请先设置 API Key');
+        const trimmed = (sampleText || '').trim();
+        if (!trimmed) throw new Error('样本内容为空');
+
+        const systemPrompt = `你是一位课堂反馈文案分析专家。你需要分析用户提供的"课堂反馈样本"，反推出一套能复刻该样本风格的系统配置。
+你必须严格输出 JSON，不要输出任何 JSON 之外的内容（不要 markdown 代码块标记、不要解释）。无法从样本中确定的字段一律返回 null。`;
+
+        const userPrompt = `请分析以下课堂反馈样本，反推系统配置。
+
+## 课堂反馈样本
+${trimmed}
+
+## 需要反推的配置字段（输出 JSON，字段名必须完全一致）
+
+{
+  "tone": "语气风格，从以下枚举选一：friendly(亲切) | formal(正式) | concise(简洁) | detailed(详细) | humorous(幽默) | encouraging(鼓励)",
+  "useEmoji": true或false，样本中是否使用了 emoji 表情,
+  "emojiPosition": "emoji位置，从以下枚举选一：content(在内容中) | title(标题后) | end(模块末尾) | none。若 useEmoji 为 false 则为 none",
+  "useBulletPoints": true或false，样本是否使用了分点/列表格式（如 1. 2. 或 - 开头）,
+  "nameShorten": true或false，样本中学生姓名是否被缩写（如三字名取后两字）。若无法判断返回 null,
+  "includeParentHelp": true或false，样本中是否包含"请家长协助/配合"类内容,
+  "strictInput": 固定返回 true（无法从样本反推，保持安全默认）,
+
+  "titleTemplate": "标题模板字符串。从样本第一行反推。使用占位符：{日期} {姓名} {科目} {试听} {机构} {老师}。例如样本标题为'6.25小明数学课堂反馈'，则模板为'{日期}{姓名}{科目}课堂反馈'。若样本无标题返回 null",
+  "titleDateFormat": "日期格式，从以下枚举选一：M.D(如6.25) | MM-DD(如06-25) | X月X日(如6月25日) | YYYY-MM-DD。若样本无日期返回 null",
+  "institutionName": "样本标题/正文中出现的机构名，无则返回 null",
+  "teacherName": "样本标题/正文中出现的老师名，无则返回 null",
+
+  "moduleWrap": "模块名包裹符号，从以下枚举选一：'【】' | '[]' | '（）' | '·' | 'none'。识别样本中模块名的包裹方式",
+  "moduleSeparator": "模块间分隔符，从以下枚举选一：'\\n\\n'(空行) | '\\n'(单换行) | '\\n---\\n'(横线) | '\\n\\n---\\n\\n'(空行+横线+空行)。识别样本中模块之间的分隔方式",
+
+  "modules": [
+    {
+      "name": "模块名（去除包裹符号后的纯文本）",
+      "icon": "样本中该模块名前出现的 emoji，无则返回空字符串",
+      "prompt": "针对该模块的写作要求描述（2-4句话，说明该模块应生成什么内容、什么风格、大致字数）。从样本该模块的实际内容反推",
+      "minLength": 数字，该模块在样本中的最少字数（估算下限）,
+      "maxLength": 数字，该模块在样本中的最多字数（估算上限）
+    }
+  ],
+
+  "customPrompt": "整体写作要求备注（1-3句话，总结样本的整体写作风格、语气特点、特殊要求，作为每次生成反馈时的追加要求）。无特殊要求返回空字符串"
+}
+
+## 分析要点
+1. 模块列表：按样本中出现的顺序排列，从正文中识别所有"包裹符号+模块名+包裹符号"的段落
+2. 模块字数：估算每个模块内容的字数范围，给出合理的 min/max
+3. emoji 位置：仔细观察 emoji 出现的规律（标题里、内容里、模块末尾）
+4. 标题模板：尽量用占位符还原样本标题的拼接方式，保持原有分隔符
+5. 无法确定的字段必须返回 null，不要臆测`;
+
+        const content = await this.chatCompletion([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ], { temperature: 0.2, maxTokens: 2500, signal });
+
+        // 解析 JSON（兼容可能的代码块包裹）
+        return this._parseAnalysisJSON(content);
+    }
+
+    /**
+     * 解析 analyzeFeedbackStyle 返回的 JSON（容错处理）
+     */
+    static _parseAnalysisJSON(content) {
+        let jsonStr = (content || '').trim();
+        const codeBlockMatch = jsonStr.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+        if (codeBlockMatch) {
+            jsonStr = codeBlockMatch[1].trim();
+        }
+        // 容错：截取第一个 { 到最后一个 }
+        const firstBrace = jsonStr.indexOf('{');
+        const lastBrace = jsonStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+        }
+        const parsed = JSON.parse(jsonStr);
+        return parsed;
     }
 }
 

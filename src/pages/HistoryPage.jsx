@@ -23,7 +23,7 @@ import { useSession } from '../store/SessionContext';
 import { UI } from '../utils/ui';
 import AiService from '../services/aiService';
 import {
-  generateFeedbackTitle, getModuleIcon,
+  generateFeedbackTitle, getModuleIcon, resolveModuleWrap,
   copyToClipboard, buildFeedbackText,
 } from '../utils/feedback';
 import { adaptColorForTheme } from '../utils/color';
@@ -162,7 +162,7 @@ export default function HistoryPage() {
       getStudentById: store.getStudentById.bind(store),
       style,
     });
-    const text = buildFeedbackText(item.feedback || [], title);
+    const text = buildFeedbackText(item.feedback || [], title, style);
     const ok = await copyToClipboard(text);
     if (ok) UI.showToast('已复制到剪贴板');
     else UI.showToast('复制失败，请手动复制');
@@ -189,6 +189,9 @@ export default function HistoryPage() {
       UI.showToast('没有可导出的反馈');
       return;
     }
+    const style = Storage.getStyle();
+    const wrap = resolveModuleWrap(style.moduleWrap);
+    const sep = style.moduleSeparator ?? '\n\n';
     let text = `课堂反馈记录\n================\n\n`;
     items.forEach(item => {
       const subject = subjectMap[item.subjectId];
@@ -196,9 +199,8 @@ export default function HistoryPage() {
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       text += `【${dateStr}】${subject ? subject.name : '未分类'}\n`;
       text += '─'.repeat(30) + '\n';
-      (item.feedback || []).forEach(f => {
-        text += `【${f.module}】\n${f.content}\n\n`;
-      });
+      const parts = (item.feedback || []).map(f => `${wrap.open}${f.module}${wrap.close}\n${f.content}`);
+      text += parts.join(sep) + '\n\n';
       text += '\n';
     });
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -209,7 +211,7 @@ export default function HistoryPage() {
     a.click();
     URL.revokeObjectURL(url);
     UI.showToast(`已导出 ${items.length} 条反馈`);
-  }, [subjectMap]);
+  }, [subjectMap, Storage]);
 
   const exportAll = useCallback(() => {
     if (!currentStudent) return;

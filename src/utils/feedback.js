@@ -28,21 +28,39 @@ export function matchStudentByName(students, name) {
 }
 
 /**
- * 生成日期字符串（M.D 格式）
- * - 支持自定义日期（YYYY-MM-DD → M.D，用 parseInt 去前导零）
- * - 默认使用当天日期
+ * 生成日期字符串
+ * - 支持 useCustomDate/customDate（YYYY-MM-DD）
+ * - 支持 titleDateFormat：M.D（默认，向后兼容）| MM-DD | X月X日 | YYYY-MM-DD
  *
  * @param {object} style - Storage.getStyle() 返回的风格对象
  * @returns {string} 日期字符串，如 "6.25"
  */
 export function getDateStr(style) {
+    let date;
     if (style && style.useCustomDate && style.customDate) {
         const parts = style.customDate.split('-');
-        if (parts.length === 3) return `${parseInt(parts[1])}.${parseInt(parts[2])}`;
-        return style.customDate;
+        if (parts.length === 3) {
+            date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+            return style.customDate;
+        }
+    } else {
+        date = new Date();
     }
-    const now = new Date();
-    return `${now.getMonth() + 1}.${now.getDate()}`;
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const fmt = style?.titleDateFormat || 'M.D';
+    switch (fmt) {
+        case 'MM-DD':
+            return `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        case 'X月X日':
+            return `${m}月${d}日`;
+        case 'YYYY-MM-DD':
+            return `${date.getFullYear()}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        case 'M.D':
+        default:
+            return `${m}.${d}`;
+    }
 }
 
 /**
@@ -63,8 +81,16 @@ export function getDisplayName(name, style) {
 }
 
 /**
- * 生成反馈标题
- * 顺序：[日期, 姓名, 科目+试听标记, '课堂反馈']，过滤空值，无分隔符直接拼接
+ * 生成反馈标题（模板化）
+ * 默认模板 '{日期}{姓名}{科目}{试听}课堂反馈' 等同于原硬编码行为，保证旧数据兼容。
+ *
+ * 支持占位符：
+ *   {日期} - 根据 titleDateFormat 格式化的日期
+ *   {姓名} - 学生姓名（小组模式用顿号连接，受 nameShorten 影响）
+ *   {科目} - 科目名
+ *   {试听} - 试听标记（试听课为"试听"，否则为空）
+ *   {机构} - 机构名（style.institutionName）
+ *   {老师} - 老师名（style.teacherName）
  *
  * @param {object} options
  * @param {object} options.student - 当前学生（单学生模式）
@@ -75,6 +101,7 @@ export function getDisplayName(name, style) {
  * @returns {string} 标题，如 "6.25小明数学试听课堂反馈"
  */
 export function generateFeedbackTitle({ student, group, subject, getStudentById, style }) {
+    const tpl = (style && style.titleTemplate) || '{日期}{姓名}{科目}{试听}课堂反馈';
     const dateStr = getDateStr(style);
 
     let namePart = '';
@@ -101,16 +128,51 @@ export function generateFeedbackTitle({ student, group, subject, getStudentById,
     }
 
     const subjectPart = subject ? subject.name : '';
-    const subjectFull = trialPart ? `${subjectPart}${trialPart}` : subjectPart;
+    const institution = (style && style.institutionName) || '';
+    const teacher = (style && style.teacherName) || '';
 
-    const parts = [dateStr, namePart, subjectFull, '课堂反馈'].filter(p => p);
-    return parts.join('');
+    // 占位符替换（replaceAll 安全：占位符未出现时无副作用）
+    return tpl
+        .replaceAll('{日期}', dateStr)
+        .replaceAll('{姓名}', namePart)
+        .replaceAll('{科目}', subjectPart)
+        .replaceAll('{试听}', trialPart)
+        .replaceAll('{机构}', institution)
+        .replaceAll('{老师}', teacher);
+}
+
+/**
+ * 解析模块名包裹符号配置为 open/close 一对字符串
+ * 支持：'【】' | '[]' | '（）' | '·' | 'none' | 自定义双字符 | 自定义单字符
+ * @param {string} wrap - 包裹符号配置
+ * @returns {{open:string, close:string}}
+ */
+export function resolveModuleWrap(wrap) {
+    if (!wrap || wrap === '【】') return { open: '【', close: '】' };
+    if (wrap === '[]') return { open: '[', close: ']' };
+    if (wrap === '（）') return { open: '（', close: '）' };
+    if (wrap === '·') return { open: '· ', close: '' };
+    if (wrap === 'none') return { open: '', close: '' };
+    // 自定义：双字符取首尾，单字符只作前缀
+    if (wrap.length >= 2) return { open: wrap[0], close: wrap[wrap.length - 1] };
+    if (wrap.length === 1) return { open: wrap, close: '' };
+    return { open: '【', close: '】' };
 }
 
 /**
  * 模块图标映射
+ * 优先读取用户在 Storage.modules 中为该模块配置的 icon；
+ * 未配置则回退到按模块名硬编码的默认图标。
  */
 export function getModuleIcon(moduleName) {
+    // feedback.js 顶部已 import Storage，此处直接读取用户配置
+    try {
+        const modules = Storage.getModules();
+        const mod = modules.find(m => m.name === moduleName);
+        if (mod && mod.icon) return mod.icon;
+    } catch (e) {
+        // Storage 未初始化等异常时降级到默认映射
+    }
     const iconMap = {
         '课堂内容': '📖',
         '课堂表现': '🌟',
@@ -229,14 +291,22 @@ export async function copyToClipboard(text) {
 
 /**
  * 拼接反馈为纯文本（用于复制/导出）
- * 格式：标题 + 空行 + 各模块【模块名】\n内容，模块间用空行分隔
+ * 格式：标题 + 空行 + 各模块「包裹符号+模块名+包裹符号」\n内容，模块间用分隔符分隔
+ *
+ * 支持自定义包裹符号（style.moduleWrap）和模块间分隔符（style.moduleSeparator）。
+ * 默认值（'【】' / '\n\n'）与原硬编码行为一致，保证旧调用方兼容。
  *
  * @param {Array<{module: string, content: string}>} feedback - 反馈数组
  * @param {string} title - 标题
+ * @param {object} [style] - 可选，Storage.getStyle() 返回的风格对象
  * @returns {string} 拼接后的文本
  */
-export function buildFeedbackText(feedback, title) {
-    const body = (feedback || []).map(f => `【${f.module}】\n${f.content}`).join('\n\n');
+export function buildFeedbackText(feedback, title, style) {
+    const wrap = resolveModuleWrap(style?.moduleWrap);
+    const sep = style?.moduleSeparator ?? '\n\n';
+    const body = (feedback || [])
+        .map(f => `${wrap.open}${f.module}${wrap.close}\n${f.content}`)
+        .join(sep);
     return `${title}\n\n${body}`;
 }
 

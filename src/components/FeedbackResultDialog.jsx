@@ -19,7 +19,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
-  matchStudentByName, generateFeedbackTitle, getModuleIcon,
+  matchStudentByName, generateFeedbackTitle, getModuleIcon, resolveModuleWrap,
   unifyCommonModules, copyToClipboard, buildFeedbackText,
 } from '../utils/feedback';
 import { UI } from '../utils/ui';
@@ -231,7 +231,7 @@ export default function FeedbackResultDialog(props) {
     isCopyingRef.current = true;
     setCopying(true);
 
-    const text = buildFeedbackText(currentFeedback, currentTitle);
+    const text = buildFeedbackText(currentFeedback, currentTitle, style);
     const ok = await copyToClipboard(text);
     if (ok) {
       UI.showToast('已复制到剪贴板');
@@ -244,7 +244,7 @@ export default function FeedbackResultDialog(props) {
       isCopyingRef.current = false;
       setCopying(false);
     }, 300);
-  }, [currentFeedback, currentTitle]);
+  }, [currentFeedback, currentTitle, style]);
 
   // ========== 重新生成 ==========
   const handleRegenerate = useCallback(() => {
@@ -311,13 +311,15 @@ export default function FeedbackResultDialog(props) {
 
         {/* ========== 反馈模块列表（可编辑） ========== */}
         <Stack spacing={2}>
-          {currentFeedback.map((item, index) => (
+          {currentFeedback.map((item, index) => {
+            const wrap = resolveModuleWrap(style?.moduleWrap);
+            return (
             <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
                 <Box component="span" sx={{ mr: 0.5 }} aria-hidden>
                   {getModuleIcon(item.module)}
                 </Box>
-                【{item.module}】
+                {wrap.open}{item.module}{wrap.close}
               </Typography>
               <TextField
                 multiline
@@ -334,7 +336,8 @@ export default function FeedbackResultDialog(props) {
                 编辑后失焦自动保存
               </Typography>
             </Paper>
-          ))}
+            );
+          })}
           {currentFeedback.length === 0 && (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
               暂无反馈内容

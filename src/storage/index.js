@@ -41,7 +41,22 @@ const DEFAULT_STYLE = {
     strictInput: true,       // 严格基于输入内容，不编造
     // 日期设置
     useCustomDate: false,    // 是否使用自定义日期
-    customDate: ''           // 自定义日期（YYYY-MM-DD格式）
+    customDate: '',          // 自定义日期（YYYY-MM-DD格式）
+
+    // ===== 标题模板化（支持占位符替换） =====
+    // 默认模板等同于原硬编码行为，保证旧数据兼容
+    titleTemplate: '{日期}{姓名}{科目}{试听}课堂反馈',
+    // 日期格式：M.D | MM-DD | X月X日 | YYYY-MM-DD
+    titleDateFormat: 'M.D',
+    // 机构/老师名（可用于标题占位符 {机构} {老师}）
+    institutionName: '',
+    teacherName: '',
+
+    // ===== 模块格式自定义（批次2） =====
+    // 模块名包裹符号：'【】' | '[]' | '（）' | '·' | 'none' | 自定义双字符
+    moduleWrap: '【】',
+    // 模块间分隔符
+    moduleSeparator: '\n\n'
 };
 
 const DEFAULT_THEME = 'default'; // default, dark, warm, green
@@ -138,6 +153,19 @@ class Storage {
         const modules = this.getModules();
         modules.push({ name, enabled: true, custom: true, description });
         this.saveModules(modules);
+    }
+
+    /**
+     * 更新指定索引模块的部分字段（批次2：支持改名/icon/prompt/description）
+     * @param {number} index - 模块索引
+     * @param {object} updates - 要更新的字段
+     */
+    static updateModule(index, updates) {
+        const modules = this.getModules();
+        if (modules[index]) {
+            modules[index] = { ...modules[index], ...updates };
+            this.saveModules(modules);
+        }
     }
 
     static toggleModule(index) {
