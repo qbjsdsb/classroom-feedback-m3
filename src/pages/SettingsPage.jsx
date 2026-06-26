@@ -379,15 +379,6 @@ export default function SettingsPage() {
     }
   }, [Storage]);
 
-  const handleModuleDescChange = useCallback((index, desc) => {
-    const newModules = [...modules];
-    if (newModules[index] && newModules[index].custom) {
-      newModules[index] = { ...newModules[index], description: desc };
-      Storage.saveModules(newModules);
-      setModules(newModules);
-    }
-  }, [modules, Storage]);
-
   // 批次2：模块字段通用更新（支持 icon/prompt/description，对所有模块开放，不限 custom）
   const handleModuleFieldChange = useCallback((index, field, value) => {
     const newModules = [...modules];
@@ -2116,6 +2107,38 @@ export default function SettingsPage() {
               inputProps={{ step: 10, min: 1, max: 10000 }}
               helperText="默认 50 条"
             />
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              导出格式自定义（HistoryPage 导出 .txt 文件时生效）
+            </Typography>
+            <Stack spacing={1}>
+              <TextField
+                label="导出头部标题"
+                value={style.exportHeader ?? '课堂反馈记录'}
+                onChange={(e) => setStyle({ ...style, exportHeader: e.target.value })}
+                size="small"
+                fullWidth
+                helperText="留空则不输出头部标题行"
+              />
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, useFlexGap: true }}>
+                <TextField
+                  label="标题下分隔线"
+                  value={style.exportTitleSeparator ?? '================'}
+                  onChange={(e) => setStyle({ ...style, exportTitleSeparator: e.target.value })}
+                  size="small"
+                  sx={{ flex: 1, minWidth: 180 }}
+                  helperText="留空则无分隔线"
+                />
+                <TextField
+                  label="条目间分隔线"
+                  value={style.exportEntrySeparator ?? '──────────────────────────────'}
+                  onChange={(e) => setStyle({ ...style, exportEntrySeparator: e.target.value })}
+                  size="small"
+                  sx={{ flex: 1, minWidth: 180 }}
+                  helperText="留空则无条目分隔线"
+                />
+              </Stack>
+            </Stack>
             <Divider sx={{ my: 1.5 }} />
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               配置迁移（换机构用，不含学生和历史）

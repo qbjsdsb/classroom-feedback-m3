@@ -157,7 +157,6 @@ export default function FeedbackResultDialog(props) {
     if (mode === 'group') {
       // 小组模式：使用当前学生单独的标题（仅含该学生姓名）
       if (!groupData[groupIndex]) return '';
-      const studentName = groupData[groupIndex].studentName;
       // 临时构造一个单学生模式的标题
       const matchedStudent = currentStudentObj;
       return generateFeedbackTitle({
